@@ -1,0 +1,20 @@
+[package]
+name = "joy2uinput"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name="joy2uinput"
+path="src/joy2uinput.rs"
+
+[[bin]]
+name="joy2u_mapgen"
+path="src/joy2u_mapgen.rs"
+
+[dependencies]
+evdev = "0.12.1"
+joydev = "0.3.1"
+dirs = "5.0.1"
+inotify = "0.10.2"
+#nix = "0.26.2"
+ioctls = "0.6.1"
