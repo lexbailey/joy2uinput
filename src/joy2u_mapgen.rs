@@ -11,6 +11,9 @@ use std::path::Path;
 use std::fs::OpenOptions;
 use std::os::fd::AsRawFd;
 use std::mem::MaybeUninit;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+mod map_config;
 
 const conf_dir_env_var: &'static str = "JOY2UINPUT_CONFDIR";
 
@@ -37,11 +40,20 @@ impl Debug for Fatal{
    } 
 }
 
+#[derive(Debug,Default,Clone,Copy)]
+struct AxisMotion{
+    min: i16,
+    max: i16,
+    n_events: u64,
+}
+
 enum Ev{
-    Joy(joydev::DeviceEvent),
+    Joy(OsString, joydev::Event),
+    JoyAxisSettled(),
     Key(),
     Connect(OsString),
     Disconnect(OsString),
+    Listen(),
 }
 
 fn hotplug_thread(evs: Sender<Ev>) -> Option<std::thread::JoinHandle<()>> {
@@ -82,26 +94,44 @@ fn hotplug_thread(evs: Sender<Ev>) -> Option<std::thread::JoinHandle<()>> {
 }
 
 fn pad_thread(evs: Sender<Ev>, s: &Path) -> joydev::Result<(String, std::fs::File, JoinHandle<()>)> {
-    println!("{}", s.display());
     let fd = OpenOptions::new().read(true).open(s)?;
-    let dev = unsafe{joydev::Device::from_raw_fd(fd.as_raw_fd())?};
-    let name = dev.identifier().to_string();
+    let rfd = fd.as_raw_fd();
+    let name = joydev::io_control::get_identifier(rfd).unwrap_or("unknown".to_string());
+    let p: OsString = PathBuf::from(s).as_os_str().into();
+    println!("Device connected: {}", name);
     Ok((name.clone(), fd, std::thread::spawn(move ||{
         loop{
-            match dev.get_event(){
+            match joydev::io_control::get_event(rfd){
                 Ok(ev) => {
-                    evs.send(Ev::Joy(ev));
+                    evs.send(Ev::Joy(p.clone(), ev));
                 },
                 _ => {break;}
             }
         }
-        println!("Pad thread terminated: {}", name);
+        println!("Device diconnected: {}", name);
     })))
 }
+
+fn listen_after(evs: Sender<Ev>, msecs: u64) -> JoinHandle<()> {
+    std::thread::spawn(move ||{
+        std::thread::sleep(Duration::from_millis(msecs));
+        evs.send(Ev::Listen());
+    })
+}
+
+#[derive(Debug,PartialEq,Eq,Hash)]
+enum JDEv{
+    Button(u8),
+    AxisAsButton(u8, i16),
+    Axis(u8, i16, i16),
+}
+
 
 fn main() -> Result<(),Fatal> {
     println!("joy2u_mapgen - generate a mapping file for joy2uinput");
     println!("");
+
+    println!("{}", map_config::Button::Custom(12));
 
     let (user_conf_dir, is_from_env) = get_user_conf_dir();
 
@@ -150,28 +180,227 @@ fn main() -> Result<(),Fatal> {
     println!("");
     println!("To start generating a config, press any button on the joypad to configure. ({} devices currently connected)", n_pads);
 
+    let mut listening = false;
+    let mut wait_thread = None;
+
+    let mut cur_dev = None;
+
+    use map_config::{Button, Axis, JoyInput};
+
+    let mut next_map = 0;
+    const to_map: [JoyInput; 18] = [
+        JoyInput::Button(Button::Up()),
+        JoyInput::Button(Button::Down()),
+        JoyInput::Button(Button::Left()),
+        JoyInput::Button(Button::Right()),
+        
+        JoyInput::Button(Button::A()),
+        JoyInput::Button(Button::B()),
+        JoyInput::Button(Button::X()),
+        JoyInput::Button(Button::Y()),
+
+        JoyInput::Button(Button::Start()),
+        JoyInput::Button(Button::Select()),
+    
+        JoyInput::Button(Button::RShoulder()),
+        JoyInput::Button(Button::LShoulder()),
+        JoyInput::Button(Button::RTrigger()),
+        JoyInput::Button(Button::LTrigger()),
+
+        JoyInput::Axis(Axis::LeftX()),
+        JoyInput::Axis(Axis::LeftY()),
+        JoyInput::Axis(Axis::RightX()),
+        JoyInput::Axis(Axis::RightY()),
+    ];
+
+    let mut config = HashMap::new();
+
+    let mut recent_axes = HashMap::new();
+
+    let next_motion_check: Arc<Mutex<Instant>> = Arc::new(Mutex::new(Instant::now()));
+
+
+    let mut motion_check_thread = None;
+
+    macro_rules! wait_to_settle {
+        ($timeout:expr) => {
+            {
+                *next_motion_check.lock().unwrap() = Instant::now()+Duration::from_millis($timeout);
+            }
+            if motion_check_thread.is_none(){
+                let t_send = send.clone();
+                let t_next_check = next_motion_check.clone();
+                motion_check_thread = Some(std::thread::spawn(move || {
+                    loop {
+                        let t = { t_next_check.lock().unwrap().clone() };
+                        let now = Instant::now();
+                        if now > t {
+                            t_send.send(Ev::JoyAxisSettled());
+                            break;
+                        }
+                        else{
+                            std::thread::sleep((t-now) + Duration::from_millis(1));
+                        }
+                    }
+                }));
+            }
+        }
+    }
+
+    macro_rules! reset_axes {
+        () => { recent_axes.clear(); }
+    }
+
+    macro_rules! next {
+        ()=>{
+            next_map += 1;
+            reset_axes!();
+            if next_map >= to_map.len(){
+                println!("Complete!");
+                println!("{:?}", config);
+            }
+            else {
+                let n = &to_map[next_map];
+                match n {
+                    JoyInput::Button(_) => {println!("\nPress {}", n);},
+                    JoyInput::Axis(_) => {println!("\nMove axis {} quickly to both extremes, then wait", n);},
+                }
+            }
+        }
+    }
+
+    macro_rules! record_axis_event {
+        ($ev:ident, $timeout:expr) => {
+            let num = $ev.number();
+            let val = $ev.value();
+            let mut axis = recent_axes.get(&num).map(|a|*a).or(Some(AxisMotion::default())).unwrap();
+            axis.min = axis.min.min(val);
+            axis.max = axis.max.max(val);
+            axis.n_events += 1;
+            recent_axes.insert(num, axis);
+            wait_to_settle!($timeout);
+        }
+    }
+
+    macro_rules! get_settled_event {
+        () => {
+            {
+                let mut highest_freq = 0;
+                let mut axis = None;
+                for m in recent_axes.values(){
+                    highest_freq = highest_freq.max(m.n_events);
+                }
+                for (n,m) in recent_axes.iter(){
+                    if m.n_events == highest_freq {
+                        axis = Some(n);
+                        break;
+                    }
+                }
+                axis.map(|a| (*a, *recent_axes.get(a).unwrap()))
+            }
+        }
+    }
+
     loop{
         match recv.recv(){
             Ok(msg) => match msg {
                 Ev::Connect(s) => {
-                    println!("Device connected: {}", &s.to_string_lossy());
+                    listening = false;
                     if !pads.contains_key(&s){
                         let t = pad_thread(send.clone(), &Path::new(&s));
                         match t{
                             Ok(t) => {pads.insert(s,t);}
                             Err(e) => {eprintln!("Error connecting to joypad {:?}", e);}
                         }
-                        println!("mapping: {:?}", pads);
                     }
+                    wait_thread = Some(listen_after(send.clone(), 200));
                 },
                 Ev::Disconnect(s) => {
-                    println!("Device disconnected: {}", &s.to_string_lossy());
                     if let Some((n, fd, join)) = pads.remove(&s){
                         join.join();
                     }
                 },
                 Ev::Key() => {},
-                Ev::Joy(ev) => {println!("Input from joypad: {:?}", ev)},
+                Ev::Joy(dev, ev) => {
+                    if listening {
+                        let pad = pads.get(&dev);
+                        if pad.is_none(){
+                            continue;
+                        }
+                        let (name, _file, _joinhandle) = pad.unwrap();
+
+                        if let Some(cdev) = cur_dev.as_ref(){
+                            if &dev == cdev{
+                                // Do a mapping thing (maybe)
+                                let n = &to_map[next_map];
+                                use joydev::GenericEvent;
+                                match n{
+                                    JoyInput::Button(b) => {
+                                        match ev.type_() {
+                                            joydev::EventType::Button | joydev::EventType::ButtonSynthetic => {
+                                                if ev.value() == 1{
+                                                    println!("Button number {} is '{}'", ev.number(), n);
+                                                    config.insert(JDEv::Button(ev.number()), n);
+                                                    next!();
+                                                }
+                                            },
+                                            joydev::EventType::Axis | joydev::EventType::AxisSynthetic => {
+                                                if ev.value() != 0{
+                                                    record_axis_event!(ev, 300);
+                                                }
+                                            }
+                                        }
+                                    },
+                                    JoyInput::Axis(a) => {
+                                        match ev.type_() {
+                                            joydev::EventType::Button | joydev::EventType::ButtonSynthetic => {}, //ignore buttons if mapping an axis
+                                            joydev::EventType::Axis | joydev::EventType::AxisSynthetic => {
+                                                record_axis_event!(ev, 600);
+                                            }
+                                        }
+                                    },
+                                }
+                                //println!("Input from joypad {:#?}: {:?}", dev, ev);
+                            }
+                        }
+
+                        if cur_dev.is_none(){
+                            cur_dev = Some(dev.clone());
+                            println!("Started mapping joypad: {}", name);
+                            println!("To skip mapping a button, press the spacebar");
+                            let n = &to_map[next_map];
+                            println!("\nPress {}", n);
+                        }
+                    }
+                },
+                Ev::JoyAxisSettled() => {
+                    motion_check_thread.take().unwrap().join();
+                    let (number, motion) = get_settled_event!().unwrap();
+                    reset_axes!();
+                    let n = &to_map[next_map];
+                    use joydev::GenericEvent;
+                    match n{
+                        JoyInput::Button(b) => {
+                            if motion.n_events > 1 {
+                                println!("Detected axis event sequence. Are you sure you pressed a button? Try again.")
+                            }
+                            else{
+                                let val = if motion.min != 0 {motion.min} else {motion.max};
+                                println!("Axis {} at value of {} is button '{}'", number, val, n);
+                                config.insert(JDEv::AxisAsButton(number, val), n);
+                                next!();
+                            }
+                        },
+                        JoyInput::Axis(a) => {
+                            println!("Axis {} is '{}' with range {}..{}", number, n, motion.min, motion.max);
+                            config.insert(JDEv::Axis(number, motion.min, motion.max), n);
+                            next!();
+                        },
+                    }
+                }
+                Ev::Listen() => {
+                    listening = true;
+                }
             }
             _ => {break;}
         }
