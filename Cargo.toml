@@ -8,7 +8,7 @@ name="joy2uinput"
 path="src/joy2uinput.rs"
 
 [[bin]]
-name="joy2u_mapgen"
+name="joy2u-mapgen"
 path="src/joy2u_mapgen.rs"
 
 [dependencies]
@@ -19,3 +19,4 @@ inotify = "0.10.2"
 ioctls = "0.6.1"
 strum = "0.25"
 strum_macros = "0.25"
+nix = {version="0.27.1", features=["term"]}
