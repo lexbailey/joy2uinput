@@ -1,3 +1,18 @@
+/*
+
+Hi!
+
+If you're reading this for the first time, welcome!
+
+What does this file do?
+
+    This is the main program file for joy2uinput.
+    It reads the config files, then opens a virtual input device via uinput, then
+    starts listening to all the joystick input devices and mapping them to the
+    virtual input device as per the config.
+
+*/
+
 #![allow(non_upper_case_globals)]
 use std::path::PathBuf;
 use std::fmt::Debug;

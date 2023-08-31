@@ -1,3 +1,14 @@
+/*
+
+What does this file do?
+
+    This is the file with all the datatypes that are used internally in joy2uinput
+    These are also used somewhat by joy2u-mapgen.
+    This includes all of the parser logic for reading from config files, and also
+    the generation logic for writing config files.
+
+*/
+
 use std::str::FromStr;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -251,6 +262,14 @@ pub enum KeyTarget{
     LAlt(),
     RAlt(),
     Menu(),
+    // not strictly keys, but they look the same to uinput, so this is fine
+    MouseButtonLeft(),
+    MouseButtonRight(),
+    MouseButtonMiddle(),
+    MouseButtonSide(),
+    MouseButtonExtra(),
+    MouseButtonForward(),
+    MouseButtonBack(),
 }
 
 #[derive(Debug,Clone)]
@@ -296,6 +315,13 @@ impl KeyTarget{
             KeyTarget::LAlt() => evdev::Key::KEY_LEFTALT,
             KeyTarget::RAlt() => evdev::Key::KEY_RIGHTALT,
             KeyTarget::Menu() => evdev::Key::KEY_MENU,
+            KeyTarget::MouseButtonLeft() => evdev::Key::BTN_LEFT,
+            KeyTarget::MouseButtonRight() => evdev::Key::BTN_RIGHT,
+            KeyTarget::MouseButtonMiddle() => evdev::Key::BTN_MIDDLE,
+            KeyTarget::MouseButtonSide() => evdev::Key::BTN_SIDE,
+            KeyTarget::MouseButtonExtra() => evdev::Key::BTN_EXTRA,
+            KeyTarget::MouseButtonBack() => evdev::Key::BTN_BACK,
+            KeyTarget::MouseButtonForward() => evdev::Key::BTN_FORWARD,
             KeyTarget::F(n) => match n{
                 1 => evdev::Key::KEY_F1,
                 2 => evdev::Key::KEY_F2,
@@ -394,7 +420,29 @@ impl FromStr for KeyTarget{
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
         let l = s.to_lowercase();
         if !l.starts_with("key"){
-            Err(format!("Invalid key target specifier: {}.", s))
+            if !l.starts_with("mousebutton"){
+                Err(format!("Invalid key target specifier: {}", s))
+            }
+            else{
+                let args = parse_args(&l[11..], 1);
+                match args{
+                    Err(e) => {Err(format!("Malformed arguments to key target specifier: {}. {}", s, e))},
+                    Ok (args) => {
+                        match args[0] {
+                            "left" => Ok(KeyTarget::MouseButtonLeft()),
+                            "right" => Ok(KeyTarget::MouseButtonRight()),
+                            "middle" => Ok(KeyTarget::MouseButtonMiddle()),
+                            "side" => Ok(KeyTarget::MouseButtonSide()),
+                            "extra" => Ok(KeyTarget::MouseButtonExtra()),
+                            "forward" => Ok(KeyTarget::MouseButtonForward()),
+                            "back" => Ok(KeyTarget::MouseButtonBack()),
+                            s => {
+                                Err(format!("Malformed arguments to mouse button target specifier: {}", s))
+                            },
+                        }
+                    }
+                }
+            }
         }
         else{
             let args = parse_args(&l[3..], 1);
@@ -415,8 +463,8 @@ impl FromStr for KeyTarget{
                         "end" => Ok(KeyTarget::End()),
                         "delete" => Ok(KeyTarget::Delete()),
                         "tab" => Ok(KeyTarget::Tab()),
-                        "lctrl" => Ok(KeyTarget::LCtrl()),
-                        "rctrl" => Ok(KeyTarget::RCtrl()),
+                        "lctrl" | "lcontrol" => Ok(KeyTarget::LCtrl()),
+                        "rctrl" | "rcontrol" => Ok(KeyTarget::RCtrl()),
                         "lshift" => Ok(KeyTarget::LShift()),
                         "rshift" => Ok(KeyTarget::RShift()),
                         "lsuper" => Ok(KeyTarget::LSuper()),
@@ -458,7 +506,29 @@ impl FromStr for KeyTarget{
 impl FromStr for AxisTarget{
     type Err = String;
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
-        todo!()
+        let l = s.to_lowercase();
+        if !l.starts_with("axis"){
+            return Err(format!("Invalid axis target specifier: {}", s));
+        }
+        else{
+            let args = parse_args(&l[4..], 1);
+            match args{
+                Err(e) => {Err(format!("Malformed arguments to key target specifier: {}. {}", s, e))},
+                Ok (args) => {
+                    match args[0] {
+                        "mousex" => Ok(AxisTarget::MouseX()),
+                        "mousey" => Ok(AxisTarget::MouseY()),
+                        "scrollx" => Ok(AxisTarget::ScrollX()),
+                        "scrolly" => Ok(AxisTarget::ScrollY()),
+                        "pageupdown" => Ok(AxisTarget::PageUpDown()),
+                        "leftright" => Ok(AxisTarget::LeftRight()),
+                        "updown" => Ok(AxisTarget::UpDown()),
+                        "volupdown" => Ok(AxisTarget::VolUpDown()),
+                        _ => Err(format!("Invalid axis target specifier: {}", s)),
+                    }
+                },
+            }
+        }
     }
 }
 
@@ -467,6 +537,9 @@ impl FromStr for Target{
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
         let l = s.to_lowercase();
         if l.starts_with("key"){
+            return Ok(Target::Key(s.parse()?));
+        }
+        if l.starts_with("mousebutton"){
             return Ok(Target::Key(s.parse()?));
         }
         if l.starts_with("axis"){

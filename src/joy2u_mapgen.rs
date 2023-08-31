@@ -1,3 +1,10 @@
+/*
+What does this file do?
+
+    This is the main program file for joy2u-mapgen.
+    It listens for joypad input (for mapping, of course) and keyboard input (for the menu).
+    It writes config files to the user config directory.
+*/
 #![allow(non_upper_case_globals)]
 use std::path::PathBuf;
 use std::fmt::Debug;
