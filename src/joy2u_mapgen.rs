@@ -385,6 +385,7 @@ fn main() -> Result<(),Fatal> {
                         },
                         b'a' => {
                             // Add more buttons to a config
+                            todo!();
                         },
                         b'n' => {
                             // Start a new config
