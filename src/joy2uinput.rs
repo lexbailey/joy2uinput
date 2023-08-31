@@ -147,7 +147,8 @@ fn listen_after(evs: Sender<Ev>, msecs: u64) -> JoinHandle<()> {
     })
 }
 
-fn read_mappings(path: &PathBuf, mappings: &mut HashMap<OsString, HashMap<JDEv, JoyInput>>){
+fn read_mappings(path: &PathBuf, mappings: &mut HashMap<OsString, HashMap<JDEv, JoyInput>>) -> bool{
+    let mut success = true;
     if let Ok(dir) = std::fs::read_dir(path){
         for f in dir{
             match f{
@@ -162,7 +163,9 @@ fn read_mappings(path: &PathBuf, mappings: &mut HashMap<OsString, HashMap<JDEv, 
                             let path = f.path();
                             let name = path.file_stem().unwrap();
                             if let Ok(file) = OpenOptions::new().read(true).open(&path) {
+                                let mut line_num = 0;
                                 for line in std::io::BufReader::new(file).lines(){
+                                    line_num += 1;
                                     match line {
                                         Ok(line) =>{
                                             let t = line.trim();
@@ -171,10 +174,16 @@ fn read_mappings(path: &PathBuf, mappings: &mut HashMap<OsString, HashMap<JDEv, 
                                             let m = t.parse::<map_config::Mapping>();
                                             match m{
                                                 Ok(m) => {this_map.insert(m.from, m.to);},
-                                                Err(e) => {eprintln!("{}", e);}
+                                                Err(e) => {
+                                                    eprintln!("Error ('{}' line {}): {}", path.display(), line_num, e);
+                                                    success = false;
+                                                }
                                             }
                                         },
-                                        Err(e) => {eprintln!("Failed to read line from config file: {}", e)},
+                                        Err(e) => {
+                                            eprintln!("Failed to read line from config file: {}", e);
+                                            success = false;
+                                        },
                                     }
                                 }
                                 mappings.insert(path.file_name().unwrap().into(), this_map);
@@ -185,38 +194,49 @@ fn read_mappings(path: &PathBuf, mappings: &mut HashMap<OsString, HashMap<JDEv, 
             }
         }
     }
+    success
 }
 
-fn read_config(path: &PathBuf) -> Option<HashMap<JoyInput, Target>>{
+fn read_config(path: &PathBuf) -> (Option<HashMap<JoyInput, Target>>, bool){
+    let mut success = true;
     let mut conf_file = path.clone();
     conf_file.push("joy2uinput.conf");
     if conf_file.is_file(){
-        match OpenOptions::new().read(true).open(conf_file) {
+        match OpenOptions::new().read(true).open(&conf_file) {
             Err(e) => {
-                // TODO report this error
+                eprintln!("Error while reading config file {}: {}", &conf_file.display(), e);
+                success = false;
             },
             Ok(f) => {
                 let mut map = HashMap::new();
+                let mut line_num = 0;
                 for line in std::io::BufReader::new(f).lines(){
+                    line_num += 1;
                     match line {
-                       Ok(line) =>{
-                           let t = line.trim();
-                           if t.len() == 0{ continue; }
-                           if t.starts_with("#"){ continue; }
-                           let m = t.parse::<map_config::TargetMapping>();
-                           match m{
-                               Ok(m) => {map.insert(m.from, m.to);},
-                               Err(e) => {eprintln!("{}", e);}
-                           }
-                       },
-                       Err(e) => {eprintln!("Failed to read line from config file: {}", e)},
+                        Ok(line) =>{
+                            let t = line.trim();
+                            if t.len() == 0{ continue; }
+                            if t.starts_with("#"){ continue; }
+                            let m = t.parse::<map_config::TargetMapping>();
+                            match m{
+                                Ok(m) => {map.insert(m.from, m.to);},
+                                Err(e) => {
+                                    eprintln!("Error ('{}' line {}): {}", &conf_file.display(), line_num, e);
+                                    success = false;
+                                }
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!("Failed to read line from config file: {}", e);
+                            success = false;
+                        },
                     }
                 }
-                return Some(map);
+                return (Some(map), success);
             }
         }
     }
-    None
+    (None, success)
 }
 
 enum Fatal{ Msg(String) }
@@ -271,17 +291,21 @@ fn main() -> Result<(),Fatal> {
     let mut expanded_mappings: HashMap<OsString, Rc<HashMap<JDCId, (JDEv, Target)>>> = HashMap::new();
 
     let mut outmap = None;
+    let mut valid = true;
+    let mut valid2 = true;
 
     if let Some(user_conf_dir) = get_user_conf_dir(){
-        read_mappings(&user_conf_dir, &mut mappings);
-        outmap = read_config(&user_conf_dir);
+        valid &= read_mappings(&user_conf_dir, &mut mappings);
+        (outmap, valid2) = read_config(&user_conf_dir);
+        valid &= valid2;
     }
 
     let default_conf = PathBuf::from("/etc/joy2uinput/");
     if default_conf.is_dir(){
-        read_mappings(&default_conf, &mut mappings);
+        valid &= read_mappings(&default_conf, &mut mappings);
         if outmap.is_none(){
-            outmap = read_config(&default_conf);
+            (outmap, valid2) = read_config(&default_conf);
+            valid &= valid2;
         }
         if outmap.is_none(){
             eprintln!("Error: Unable to find config file joy2uinput.conf in user config dir or default config dir.");
@@ -292,6 +316,10 @@ fn main() -> Result<(),Fatal> {
             eprintln!("Default config dir searched was: /etc/joy2uinput/");
             return Err(Fatal::Msg("No config".to_string()));
         }
+    }
+
+    if !valid {
+        return Err(Fatal::Msg("Config invalid".to_string()));
     }
 
     let outmap = outmap.unwrap();
