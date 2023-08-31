@@ -3,7 +3,22 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::ffi::OsString;
 
-#[derive(Debug,Clone)]
+fn parse_args(s: &str, n: usize) -> Result<Vec<&str>, String> {
+    if s.len() < 2{
+        return Err(format!("Malformed arguments: {}.", s));
+    }
+    if !s.starts_with('(') || !s.ends_with(')') {
+        return Err(format!("Malformed arguments: {}.", s));
+    }
+    let inner = &s[1..s.len()-1];
+    let args: Vec<_> = inner.split(',').collect();
+    if args.len() != n{
+        return Err(format!("Expected {} args, found {}", n, args.len()));
+    }
+    Ok(args)
+}
+
+#[derive(Debug,Clone,PartialEq,Eq,Hash)]
 pub enum Button{
     Up(),
     Down(),
@@ -43,7 +58,7 @@ pub enum Button{
     Unmappable(),
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Eq,Hash)]
 pub enum Axis{
     LeftX(),
     LeftY(),
@@ -66,7 +81,7 @@ pub enum Axis{
 	Custom(u128),
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Eq,Hash)]
 pub enum JoyInput{
     Button(Button),
     Axis(Axis),
@@ -209,8 +224,8 @@ impl FromStr for JoyInput{
     }
 }
 
-#[derive(Debug)]
-pub enum ButtonTarget{
+#[derive(Debug,Clone)]
+pub enum KeyTarget{
     Up(),
     Down(),
     Left(),
@@ -218,10 +233,27 @@ pub enum ButtonTarget{
     Escape(),
     Return(),
     AlphaNum(char),
+    Numpad(u8),
     Space(),
+    F(u8),
+    PageUp(),
+    PageDown(),
+    Home(),
+    End(),
+    Delete(),
+    Tab(),
+    LCtrl(),
+    RCtrl(),
+    LShift(),
+    RShift(),
+    LSuper(),
+    RSuper(),
+    LAlt(),
+    RAlt(),
+    Menu(),
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum AxisTarget{
     MouseX(),
     MouseY(),
@@ -230,12 +262,218 @@ pub enum AxisTarget{
     PageUpDown(),
     LeftRight(),
     UpDown(),
+    VolUpDown(),
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum Target{
-    Button(ButtonTarget),
+    Key(KeyTarget),
     Axis(AxisTarget),
+}
+
+impl KeyTarget{
+    pub fn uinput_key(&self) -> evdev::Key{
+        match self{
+            KeyTarget::Up() => evdev::Key::KEY_UP,
+            KeyTarget::Down() => evdev::Key::KEY_DOWN,
+            KeyTarget::Left() => evdev::Key::KEY_LEFT,
+            KeyTarget::Right() => evdev::Key::KEY_RIGHT,
+            KeyTarget::Escape() => evdev::Key::KEY_ESC,
+            KeyTarget::Return() => evdev::Key::KEY_ENTER,
+            KeyTarget::Space() => evdev::Key::KEY_SPACE,
+            KeyTarget::PageUp() => evdev::Key::KEY_PAGEUP,
+            KeyTarget::PageDown() => evdev::Key::KEY_PAGEDOWN,
+            KeyTarget::Home() => evdev::Key::KEY_HOME,
+            KeyTarget::End() => evdev::Key::KEY_END,
+            KeyTarget::Delete() => evdev::Key::KEY_DELETE,
+            KeyTarget::Tab() => evdev::Key::KEY_TAB,
+            KeyTarget::LCtrl() => evdev::Key::KEY_LEFTCTRL,
+            KeyTarget::RCtrl() => evdev::Key::KEY_RIGHTCTRL,
+            KeyTarget::LShift() => evdev::Key::KEY_LEFTSHIFT,
+            KeyTarget::RShift() => evdev::Key::KEY_RIGHTSHIFT,
+            KeyTarget::LSuper() => evdev::Key::KEY_LEFTMETA,
+            KeyTarget::RSuper() => evdev::Key::KEY_RIGHTMETA,
+            KeyTarget::LAlt() => evdev::Key::KEY_LEFTALT,
+            KeyTarget::RAlt() => evdev::Key::KEY_RIGHTALT,
+            KeyTarget::Menu() => evdev::Key::KEY_MENU,
+            KeyTarget::F(n) => match n{
+                1 => evdev::Key::KEY_F1,
+                2 => evdev::Key::KEY_F2,
+                3 => evdev::Key::KEY_F3,
+                4 => evdev::Key::KEY_F4,
+                5 => evdev::Key::KEY_F5,
+                6 => evdev::Key::KEY_F6,
+                7 => evdev::Key::KEY_F7,
+                8 => evdev::Key::KEY_F8,
+                9 => evdev::Key::KEY_F9,
+                10 => evdev::Key::KEY_F10,
+                11 => evdev::Key::KEY_F11,
+                12 => evdev::Key::KEY_F12,
+                13 => evdev::Key::KEY_F13,
+                14 => evdev::Key::KEY_F14,
+                15 => evdev::Key::KEY_F15,
+                16 => evdev::Key::KEY_F16,
+                17 => evdev::Key::KEY_F17,
+                18 => evdev::Key::KEY_F18,
+                19 => evdev::Key::KEY_F19,
+                20 => evdev::Key::KEY_F20,
+                21 => evdev::Key::KEY_F21,
+                22 => evdev::Key::KEY_F22,
+                23 => evdev::Key::KEY_F23,
+                24 => evdev::Key::KEY_F24,
+                _ => evdev::Key::KEY_RESERVED,
+            },
+            KeyTarget::Numpad(n) => match n {
+                0 => evdev::Key::KEY_NUMERIC_0,
+                1 => evdev::Key::KEY_NUMERIC_1,
+                2 => evdev::Key::KEY_NUMERIC_2,
+                3 => evdev::Key::KEY_NUMERIC_3,
+                4 => evdev::Key::KEY_NUMERIC_4,
+                5 => evdev::Key::KEY_NUMERIC_5,
+                6 => evdev::Key::KEY_NUMERIC_6,
+                7 => evdev::Key::KEY_NUMERIC_7,
+                8 => evdev::Key::KEY_NUMERIC_8,
+                9 => evdev::Key::KEY_NUMERIC_9,
+                _ => evdev::Key::KEY_RESERVED,
+            },
+            KeyTarget::AlphaNum(c) => match c {
+                'a' => evdev::Key::KEY_A,
+                'b' => evdev::Key::KEY_B,
+                'c' => evdev::Key::KEY_C,
+                'd' => evdev::Key::KEY_D,
+                'e' => evdev::Key::KEY_E,
+                'f' => evdev::Key::KEY_F,
+                'g' => evdev::Key::KEY_G,
+                'h' => evdev::Key::KEY_H,
+                'i' => evdev::Key::KEY_I,
+                'j' => evdev::Key::KEY_J,
+                'k' => evdev::Key::KEY_K,
+                'l' => evdev::Key::KEY_L,
+                'm' => evdev::Key::KEY_M,
+                'n' => evdev::Key::KEY_N,
+                'o' => evdev::Key::KEY_O,
+                'p' => evdev::Key::KEY_P,
+                'q' => evdev::Key::KEY_Q,
+                'r' => evdev::Key::KEY_R,
+                's' => evdev::Key::KEY_S,
+                't' => evdev::Key::KEY_T,
+                'u' => evdev::Key::KEY_U,
+                'v' => evdev::Key::KEY_V,
+                'w' => evdev::Key::KEY_W,
+                'x' => evdev::Key::KEY_X,
+                'y' => evdev::Key::KEY_Y,
+                'z' => evdev::Key::KEY_Z,
+                '1' => evdev::Key::KEY_1,
+                '2' => evdev::Key::KEY_2,
+                '3' => evdev::Key::KEY_3,
+                '4' => evdev::Key::KEY_4,
+                '5' => evdev::Key::KEY_5,
+                '6' => evdev::Key::KEY_6,
+                '7' => evdev::Key::KEY_7,
+                '0' => evdev::Key::KEY_0,
+                '-' => evdev::Key::KEY_MINUS,
+                '=' => evdev::Key::KEY_EQUAL,
+                //'`' => evdev::Key::KEY_, // TODO what is this called?
+                '[' => evdev::Key::KEY_LEFTBRACE,
+                ']' => evdev::Key::KEY_RIGHTBRACE,
+                ';' => evdev::Key::KEY_SEMICOLON,
+                '\'' => evdev::Key::KEY_APOSTROPHE,
+                // '#' => evdev::Key::KEY_, // TODO what is this called?
+                ',' => evdev::Key::KEY_COMMA,
+                '.' => evdev::Key::KEY_DOT,
+                '/' => evdev::Key::KEY_SLASH,
+                '\\' => evdev::Key::KEY_BACKSLASH, 
+                _ => evdev::Key::KEY_RESERVED,
+            },
+        }
+    }
+}
+
+impl FromStr for KeyTarget{
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
+        let l = s.to_lowercase();
+        if !l.starts_with("key"){
+            Err(format!("Invalid key target specifier: {}.", s))
+        }
+        else{
+            let args = parse_args(&l[3..], 1);
+            match args{
+                Err(e) => {Err(format!("Malformed arguments to key target specifier: {}. {}", s, e))},
+                Ok(args) => {
+                    match args[0] {
+                        "up" => Ok(KeyTarget::Up()),
+                        "down" => Ok(KeyTarget::Down()),
+                        "left" => Ok(KeyTarget::Left()),
+                        "right" => Ok(KeyTarget::Right()),
+                        "escape" | "esc" => Ok(KeyTarget::Escape()),
+                        "return" | "enter" => Ok(KeyTarget::Return()),
+                        "space" | "spacebar" => Ok(KeyTarget::Space()),
+                        "pageup" | "pgup" => Ok(KeyTarget::PageUp()),
+                        "pagedown" | "pgdn" => Ok(KeyTarget::PageDown()),
+                        "home" => Ok(KeyTarget::Home()),
+                        "end" => Ok(KeyTarget::End()),
+                        "delete" => Ok(KeyTarget::Delete()),
+                        "tab" => Ok(KeyTarget::Tab()),
+                        "lctrl" => Ok(KeyTarget::LCtrl()),
+                        "rctrl" => Ok(KeyTarget::RCtrl()),
+                        "lshift" => Ok(KeyTarget::LShift()),
+                        "rshift" => Ok(KeyTarget::RShift()),
+                        "lsuper" => Ok(KeyTarget::LSuper()),
+                        "rsuper" => Ok(KeyTarget::RSuper()),
+                        "lalt" => Ok(KeyTarget::LAlt()),
+                        "ralt" => Ok(KeyTarget::RAlt()),
+                        "menu" => Ok(KeyTarget::Menu()),
+                        a => {
+                            if a.len() == 1{
+                                Ok(KeyTarget::AlphaNum(a.chars().next().unwrap()))
+                            }
+                            else{
+                                if a.starts_with("f"){
+                                    let num = a[1..].parse::<u8>();
+                                    match num{
+                                        Ok(num) => Ok(KeyTarget::F(num)),
+                                        Err(e) => Err(format!("Invalid key target specifier: {}. {}", s, e)),
+                                    }
+                                }
+                                else if a.starts_with("numpad"){
+                                    let num = a[6..].parse::<u8>();
+                                    match num{
+                                        Ok(num) => Ok(KeyTarget::Numpad(num)),
+                                        Err(e) => Err(format!("Invalid key target specifier: {}. {}", s, e)),
+                                    }
+                                }
+                                else{
+                                    Err(format!("Invalid key target specifier: {}", s))
+                                }
+                            }
+                        }
+                    }
+                },
+            }
+        }
+    }
+}
+
+impl FromStr for AxisTarget{
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
+        todo!()
+    }
+}
+
+impl FromStr for Target{
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
+        let l = s.to_lowercase();
+        if l.starts_with("key"){
+            return Ok(Target::Key(s.parse()?));
+        }
+        if l.starts_with("axis"){
+            return Ok(Target::Axis(s.parse()?));
+        }
+        Err(format!("Unrecognised uinput target specifier: {}", s))
+    }
 }
 
 #[derive(Debug,PartialEq,Eq,Hash,Clone)]
@@ -253,21 +491,6 @@ impl Display for JDEv{
 		    JDEv::Axis(a,min,max) => write!(f, "axis({},{},{})", a,min,max),
         }
 	}
-}
-
-fn parse_args(s: &str, n: usize) -> Result<Vec<&str>, String> {
-    if s.len() < 2{
-        return Err(format!("Malformed arguments: {}.", s));
-    }
-    if !s.starts_with('(') || !s.ends_with(')') {
-        return Err(format!("Malformed arguments: {}.", s));
-    }
-    let inner = &s[1..s.len()-1];
-    let args: Vec<_> = inner.split(',').collect();
-    if args.len() != n{
-        return Err(format!("Expected {} args, found {}", n, args.len()));
-    }
-    Ok(args)
 }
 
 fn string_err<T,E>(r: Result<T,E>) -> Result<T,String> where E: Display {
@@ -349,6 +572,33 @@ impl FromStr for Mapping{
 	}
 }
 
+#[derive(Debug)]
+pub struct TargetMapping{
+    pub from: JoyInput,
+    pub to: Target,
+}
+
+impl FromStr for TargetMapping{
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
+		// syntax is: "JDEv = JoyInput"
+		let sides: Vec<_> = s.split("=").collect();
+		if sides.len() != 2{
+			return Err(format!("Invalid mapping. Expected exactly one '=' character. '<from> = <to>'"));
+		}
+		let left = sides[0].trim();
+		let right = sides[1].trim();
+        let joyinput = left.parse::<JoyInput>();
+        let target = right.parse::<Target>();
+        // TODO: more helpful error messages with column numbers?
+        match (joyinput, target) {
+            (Ok(ji), Ok(targ)) => Ok(TargetMapping{from: ji, to: targ}),
+            (Ok(_), Err(targ)) => Err(targ),
+            (Err(ji), Ok(_)) => Err(ji),
+            (Err(ji), Err(targ)) => Err(format!("{}, also {}", ji, targ)),
+        }
+	}
+}
 pub fn jpname_to_filename(jp: &str) -> OsString{
     let mut s = OsString::from(jp
         .replace("_", "___")

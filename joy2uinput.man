@@ -1,0 +1,74 @@
+
+joy2uinput
+
+    Listens for input from joypads and generates keyboard and mouse input through virtual keyboard and mouse devices according to congigured mappings.
+
+Usage:
+
+    joy2uinput
+
+Config:
+
+    joy2uinput is configured by one joy2uinput.conf file, and various .j2umap files
+
+    The joy2uinput.conf file specifies what keyboard inputs to generate for particular joypad inputs, while the .j2umap files specify how buttons are named on a given make/model of joypad.
+
+    If you want to change emulated keyboard/mouse events from the defaults, edit joy2uinput.conf. If your controller appears to not behave correctly according to the configured mapping, then you might need to edit or generate a .j2umap file for it. (and then contribute that file upstream for others to benefit from the corrected mapping. See Bugs/Improvements section)
+
+    joy2uinput searches for user config and mapping files in the following directories in this order, loading only the first one it finds:
+
+        1. (the directory specified in the environment variable JOY2UINPUT_CONFDIR)
+        2. ~/.config/joy2uinput/
+        3. /opt/joy2uinput/
+
+    additionally, it will always load any mapping files, and possibly the default config file, from the following directory:
+
+        4. /etc/joy2uinput/
+
+    normally /etc/joy2uinput/ is present by default and contains mappings for various known joypads.
+
+    to override the default config, it is recommended to put your config files in ~/.config/joy2uinput/
+
+    in each config directory, joy2uinput will look for the following things:
+
+        - joy2uinput.conf (the main config file)
+        - *.j2umap (mapping files for specific devices)
+
+    joy2uinput will only ever load one joy2uinput.conf file. It loads the first one it finds according to the search order above.
+    However, it will search both the user config directory and /etc/joy2uinput for .j2umap files. any time it loads a mapping from a file, if the file specifies a mapping for a device that has already been loaded, then it will not overwrite the loaded mapping. This means that you can define a custom mapping file for a particular device without modifying the system level config.
+
+    To generate a mapping file empirically for a joypad you have connected to your device you can use joy2u-mapgen or a compatible mapping file generator.
+
+    The words "event" and "mapping" are overloaded, since the configuration for joy2uinput contains two different types of mappings that map between three different kinds of events.
+
+    In the documentation, I've tried to be consistent with the naming:
+    
+        - joydev event: A raw event from joydev, such as "button(3)" or "axis(1,-32768,32767)" etc
+        - joypad event: An abstract event name, this is essentially joy2udev's internal representation of the event
+        - uinput event: An event that joy2uinput will generate through a virtual keyboard or mouse device
+
+    The mapping files (.j2umap) describe what internal joypad events to generate for each joydev event
+    Mapping files consist of blank lines, #-comment lines, and lines of the form:
+
+        <joydev_event>=<joypad_event>
+
+    The config file (joy2uinput.conf) maps joypad events to uinput events.
+    The config file consist of blank lines, #-comment lines, and lines of the form:
+
+        <joypad_event>=<uinput_event>
+
+Event name reference:
+
+    TODO document this
+
+Environment:
+
+    JOY2UINPUT_CONFDIR: user config directory (see Config section)
+
+Bugs/Improvements:
+
+    Send them to me on github!
+
+    https://github.com/lexbailey/joy2uinput/issues
+
+    Feel free to open an issue for any bug you find. You can also share your .j2umap files for devices that are not currently in the repo. This will help others have a better out-of-box experience with joy2uinput if they have the same joypad as you.

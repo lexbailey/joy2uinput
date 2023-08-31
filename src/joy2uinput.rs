@@ -15,6 +15,9 @@ use map_config::{JDEv, Button, Axis, JoyInput, Target};
 use joydev::GenericEvent;
 use std::fs::File;
 use std::rc::Rc;
+use std::io::BufRead;
+use evdev::Key as EDKey;
+use evdev::{InputEvent, EventType};
 
 const conf_dir_env_var: &'static str = "JOY2UINPUT_CONFDIR";
 
@@ -144,13 +147,76 @@ fn listen_after(evs: Sender<Ev>, msecs: u64) -> JoinHandle<()> {
     })
 }
 
-fn read_mappings(path: &PathBuf, mappings: &mut HashMap<OsString, HashMap<JDEv, &JoyInput>>){
-    // TODO
-    eprintln!("Todo: load config from {}", path.display());
+fn read_mappings(path: &PathBuf, mappings: &mut HashMap<OsString, HashMap<JDEv, JoyInput>>){
+    if let Ok(dir) = std::fs::read_dir(path){
+        for f in dir{
+            match f{
+                Err(_) => {},
+                Ok(f) => {
+                    if let Ok(ft) = f.file_type(){
+                        if ft.is_file(){
+                            if f.path().extension() != Some(&std::ffi::OsStr::new("j2umap")){
+                                continue;
+                            }
+                            let mut this_map = HashMap::new();
+                            let path = f.path();
+                            let name = path.file_stem().unwrap();
+                            if let Ok(file) = OpenOptions::new().read(true).open(&path) {
+                                for line in std::io::BufReader::new(file).lines(){
+                                    match line {
+                                        Ok(line) =>{
+                                            let t = line.trim();
+                                            if t.len() == 0{ continue; }
+                                            if t.starts_with("#"){ continue; }
+                                            let m = t.parse::<map_config::Mapping>();
+                                            match m{
+                                                Ok(m) => {this_map.insert(m.from, m.to);},
+                                                Err(e) => {eprintln!("{}", e);}
+                                            }
+                                        },
+                                        Err(e) => {eprintln!("Failed to read line from config file: {}", e)},
+                                    }
+                                }
+                                mappings.insert(path.file_name().unwrap().into(), this_map);
+                            }
+                        }
+                    }
+                },
+            }
+        }
+    }
 }
 
 fn read_config(path: &PathBuf) -> Option<HashMap<JoyInput, Target>>{
-    None // TODO
+    let mut conf_file = path.clone();
+    conf_file.push("joy2uinput.conf");
+    if conf_file.is_file(){
+        match OpenOptions::new().read(true).open(conf_file) {
+            Err(e) => {
+                // TODO report this error
+            },
+            Ok(f) => {
+                let mut map = HashMap::new();
+                for line in std::io::BufReader::new(f).lines(){
+                    match line {
+                       Ok(line) =>{
+                           let t = line.trim();
+                           if t.len() == 0{ continue; }
+                           if t.starts_with("#"){ continue; }
+                           let m = t.parse::<map_config::TargetMapping>();
+                           match m{
+                               Ok(m) => {map.insert(m.from, m.to);},
+                               Err(e) => {eprintln!("{}", e);}
+                           }
+                       },
+                       Err(e) => {eprintln!("Failed to read line from config file: {}", e)},
+                    }
+                }
+                return Some(map);
+            }
+        }
+    }
+    None
 }
 
 enum Fatal{ Msg(String) }
@@ -163,11 +229,37 @@ impl Debug for Fatal{
    } 
 }
 
+
+// joydev control id (the number of a button or axis)
+#[derive(Debug,Eq, Hash, PartialEq)]
+enum JDCId{
+    Button(u8),
+    AxisAsButton(u8,i16),
+    Axis(u8),
+}
+
+#[derive(Debug)]
 struct ConnectedPad{
     name: String,
     file: File,
-    mapping: Option<Rc<HashMap<JDEv,Target>>>,
+    mapping: Rc<HashMap<JDCId, (JDEv,Target)>>,
     join: JoinHandle<()>,
+}
+
+impl From<&JDEv> for JDCId{
+    fn from(e: &JDEv) -> Self {
+        match e {
+            JDEv::Button(n) => JDCId::Button(*n),
+            JDEv::AxisAsButton(n,v) => JDCId::AxisAsButton(*n,*v),
+            JDEv::Axis(n,_,_) => JDCId::Axis(*n),
+        }
+    }
+}
+
+impl From<std::io::Error> for Fatal {
+    fn from(e: std::io::Error) -> Self {
+        Fatal::Msg(format!("{}", e))
+    }
 }
 
 fn main() -> Result<(),Fatal> {
@@ -175,8 +267,8 @@ fn main() -> Result<(),Fatal> {
     let mut pads: HashMap<u32,ConnectedPad> = HashMap::new();
     let mut listening = false;
     let mut _wait_thread = None;
-    let mut mappings: HashMap<OsString, HashMap<JDEv, &JoyInput>> = HashMap::new();
-    let mut expanded_mappings: HashMap<OsString, Rc<HashMap<JDEv, Target>>> = HashMap::new(); // TODO populate this after loading all config
+    let mut mappings: HashMap<OsString, HashMap<JDEv, JoyInput>> = HashMap::new();
+    let mut expanded_mappings: HashMap<OsString, Rc<HashMap<JDCId, (JDEv, Target)>>> = HashMap::new();
 
     let mut outmap = None;
 
@@ -200,6 +292,18 @@ fn main() -> Result<(),Fatal> {
             eprintln!("Default config dir searched was: /etc/joy2uinput/");
             return Err(Fatal::Msg("No config".to_string()));
         }
+    }
+
+    let outmap = outmap.unwrap();
+
+    for (k,v) in mappings.iter(){
+        let mut expmap: HashMap<JDCId, (JDEv, Target)> = HashMap::new();
+        for (from, to) in v.iter(){
+            if let Some(to) = outmap.get(&to) {
+                expmap.insert(from.into(), (from.clone(), to.clone()));
+            }
+        }
+        expanded_mappings.insert(k.clone(), Rc::new(expmap));
     }
 
     let (send, recv) = std::sync::mpsc::channel::<Ev>();
@@ -230,6 +334,19 @@ fn main() -> Result<(),Fatal> {
         }
     }
 
+    let mut keys = evdev::AttributeSet::new();
+    for (jp, mapping) in expanded_mappings.iter(){
+        for (from, (from2, to)) in mapping.iter(){
+            match to{
+                Target::Key(k) => {keys.insert(k.uinput_key());}
+                Target::Axis(a) => {
+                    todo!()
+                }
+            }
+        }
+    }
+    let mut uinput_dev = evdev::uinput::VirtualDeviceBuilder::new()?.name("joy2udev").with_keys(&keys)?.build()?;
+
     loop{
         match recv.recv(){
             Ok(msg) => match msg {
@@ -239,12 +356,21 @@ fn main() -> Result<(),Fatal> {
                         let t = pad_thread(send.clone(), &Path::new(&s));
                         match t{
                             Ok((name, file, join)) => {
-                                pads.insert(id,ConnectedPad{
-                                    name,
-                                    file,
-                                    mapping: None, // TODO use actual mapping
-                                    join,
-                                });
+                                let fname = map_config::jpname_to_filename(&name);
+                                let mapping = expanded_mappings.get(&map_config::jpname_to_filename(&name)).cloned();
+                                if mapping.is_none(){
+                                    eprintln!("Warning: There is no mapping file for the joypad: {}", name);
+                                    eprintln!("No inputs will be handled for this joypad.");
+                                }
+                                else{
+                                    let mapping = mapping.unwrap();
+                                    pads.insert(id,ConnectedPad{
+                                        name,
+                                        file,
+                                        mapping,
+                                        join,
+                                    });
+                                }
                             }
                             Err(e) => {eprintln!("Error connecting to joypad {}, will retry if device file attributes change...", e);}
                         }
@@ -265,15 +391,40 @@ fn main() -> Result<(),Fatal> {
                             continue;
                         }
                         let pad = pad.unwrap();
-
                         match ev.type_() {
                             joydev::EventType::Button | joydev::EventType::ButtonSynthetic => {
-                                // TODO
-                                eprintln!("todo: deal with button");
+                                if let Some((_, target)) = pad.mapping.get(&JDCId::Button(ev.number())){
+                                    match target {
+                                        Target::Key(k) => {
+                                            uinput_dev.emit(&[InputEvent::new(EventType::KEY, k.uinput_key().code(), ev.value().into())]);
+                                        },
+                                        _ => {},
+                                    }
+                                }
                             },
                             joydev::EventType::Axis | joydev::EventType::AxisSynthetic => {
-                                // TODO
-                                eprintln!("todo: deal with axis");
+                                match pad.mapping.get(&JDCId::Axis(ev.number())){
+                                    Some((JDEv::Axis(n,min,max), target)) => {
+                                        eprintln!("TODO: {:?}", target);
+                                    },
+                                    _ => {
+                                        match pad.mapping.get(&JDCId::AxisAsButton(ev.number(), ev.value())) {
+                                            Some((_, target)) => {
+                                                match target {
+                                                    Target::Key(k) => {
+                                                        let code = k.uinput_key().code();
+                                                        uinput_dev.emit(&[
+                                                            InputEvent::new(EventType::KEY, code, 1),
+                                                            InputEvent::new(EventType::KEY, code, 0),
+                                                        ]);
+                                                    },
+                                                    _ => {},
+                                                }
+                                            },
+                                            _ => {},
+                                        }
+                                    },
+                                }
                             },
                         }
                     }
