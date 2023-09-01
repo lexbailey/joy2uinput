@@ -149,7 +149,7 @@ Raw events from joydev devices (used only in .j2umap files) are as follows:
     where N can be almost none of the natural numbers
     
 
-# uinput_event
+### uinput_event
 The events to be sent to the virtual keyboard or mouse device (these are only used in the main config file)
 
     These are the most numerous. Linux supports lots of event types, this is only a small subset of linux's support.
