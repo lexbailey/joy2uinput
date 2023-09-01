@@ -179,31 +179,33 @@ fn read_mappings(path: &PathBuf, mappings: &mut HashMap<OsString, HashMap<JDEv, 
                             let mut this_map = HashMap::new();
                             let path = f.path();
                             let name = path.file_stem().unwrap();
-                            if let Ok(file) = OpenOptions::new().read(true).open(&path) {
-                                let mut line_num = 0;
-                                for line in std::io::BufReader::new(file).lines(){
-                                    line_num += 1;
-                                    match line {
-                                        Ok(line) =>{
-                                            let t = line.trim();
-                                            if t.len() == 0{ continue; }
-                                            if t.starts_with("#"){ continue; }
-                                            let m = t.parse::<map_config::Mapping>();
-                                            match m{
-                                                Ok(m) => {this_map.insert(m.from, m.to);},
-                                                Err(e) => {
-                                                    eprintln!("Error ('{}' line {}): {}", path.display(), line_num, e);
-                                                    success = false;
+                            if !mappings.contains_key(path.file_name().unwrap().into()){ // only if not already loaded this joypad
+                                if let Ok(file) = OpenOptions::new().read(true).open(&path) {
+                                    let mut line_num = 0;
+                                    for line in std::io::BufReader::new(file).lines(){
+                                        line_num += 1;
+                                        match line {
+                                            Ok(line) =>{
+                                                let t = line.trim();
+                                                if t.len() == 0{ continue; }
+                                                if t.starts_with("#"){ continue; }
+                                                let m = t.parse::<map_config::Mapping>();
+                                                match m{
+                                                    Ok(m) => {this_map.insert(m.from, m.to);},
+                                                    Err(e) => {
+                                                        eprintln!("Error ('{}' line {}): {}", path.display(), line_num, e);
+                                                        success = false;
+                                                    }
                                                 }
-                                            }
-                                        },
-                                        Err(e) => {
-                                            eprintln!("Failed to read line from config file: {}", e);
-                                            success = false;
-                                        },
+                                            },
+                                            Err(e) => {
+                                                eprintln!("Failed to read line from config file: {}", e);
+                                                success = false;
+                                            },
+                                        }
                                     }
+                                    mappings.insert(path.file_name().unwrap().into(), this_map);
                                 }
-                                mappings.insert(path.file_name().unwrap().into(), this_map);
                             }
                         }
                     }

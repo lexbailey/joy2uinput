@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -e
+
+cargo build --release
+
+PREP_DIR=package_release
+
+mkdir -p "$PREP_DIR/usr/bin"
+mkdir -p "$PREP_DIR/etc/joy2uinput"
+mkdir -p "$PREP_DIR/usr/share/man/man1"
+
+cp "target/release/joy2uinput" "$PREP_DIR/usr/bin/."
+cp "target/release/joy2u-mapgen" "$PREP_DIR/usr/bin/."
+cp -r "default_conf/." "$PREP_DIR/etc/joy2uinput/"
+gzip -c joy2uinput.1 > "$PREP_DIR/usr/share/man/man1/joy2uinput.1.gz"
+gzip -c joy2u-mapgen.1 > "$PREP_DIR/usr/share/man/man1/joy2u-mapgen.1.gz"

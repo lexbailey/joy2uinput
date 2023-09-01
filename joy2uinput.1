@@ -1,0 +1,190 @@
+.TH JOY2UINPUT 1 2023-09-01 joy2uinput
+.SH NAME
+joy2uinput \- joypad to virtual keyboard/mouse interface
+.SH SYNOPSIS
+.B joy2uinput
+.SH DESCRIPTION
+.B joy2uinput
+listens for input from joypads (via joydev) and generates keyboard and mouse input through virtual keyboard and mouse devices (via uinput) according to congigured mappings.
+It works with any window system because it interfaces with the kernel at the lowest level it can. X, Wayland, and any other program that reads keyboard or mouse input, will be able to pick up events from joy2uinput.
+.SH ENVIRONMENT
+JOY2UINPUT_CONFDIR: user config directory (see FILES section)
+.SH FILES
+joy2uinput is configured by one joy2uinput.conf file, and various .j2umap files
+
+The joy2uinput.conf file specifies what keyboard inputs to generate for particular joypad inputs, while the .j2umap files specify how buttons are named on a given make/model of joypad.
+
+If you want to change emulated keyboard/mouse events from the defaults, edit joy2uinput.conf. If your controller appears to not behave correctly according to the configured mapping, then you might need to edit or generate a .j2umap file for it. (and then contribute that file upstream for others to benefit from the corrected mapping. See REPORTING BUGS/IMPROVEMENTS section)
+
+joy2uinput searches for user config and mapping files in the following directories in this order, loading only the first one it finds:
+
+    1. (the directory specified in the environment variable JOY2UINPUT_CONFDIR)
+    2. ~/.config/joy2uinput/
+    3. /opt/joy2uinput/
+
+additionally, it will always load any mapping files, and possibly the default config file, from the following directory:
+
+    4. /etc/joy2uinput/
+
+normally /etc/joy2uinput/ is present by default and contains mappings for various known joypads.
+
+to override the default config, it is recommended to put your config files in ~/.config/joy2uinput/
+
+in each config directory, joy2uinput will look for the following things:
+
+    - joy2uinput.conf (the main config file)
+    - *.j2umap (mapping files for specific devices)
+
+joy2uinput will only ever load one joy2uinput.conf file. It loads the first one it finds according to the search order above.
+However, it will search both the user config directory and /etc/joy2uinput for .j2umap files. any time it loads a mapping from a file, if the file specifies a mapping for a device that has already been loaded, then it will not overwrite the loaded mapping. This means that you can define a custom mapping file for a particular device without modifying the system level config.
+
+To generate a mapping file empirically for a joypad you have connected to your device you can use joy2u-mapgen(1) or a compatible mapping file generator.
+
+The words "event" and "mapping" are overloaded, since the configuration for joy2uinput contains two different types of mappings that map between three different kinds of events.
+
+In the documentation, I've tried to be consistent with the naming:
+
+    - joydev event: A raw event from joydev, such as "button(3)" or "axis(1,-32768,32767)" etc
+    - joypad event: An abstract event name, this is essentially joy2uinput's internal representation of the event
+    - uinput event: An event that joy2uinput will generate through a virtual keyboard or mouse device
+
+The mapping files (.j2umap) describe what internal joypad events to generate for each joydev event.
+
+Mapping files consist of blank lines, #-comment lines, and lines of the form:
+
+    <joydev_event>=<joypad_event>
+
+The config file (joy2uinput.conf) maps joypad events to uinput events.
+
+The config file consist of blank lines, #-comment lines, and lines of the form:
+
+    <joypad_event>=<uinput_event>
+
+references for the event names can be found in the EVENT NAME REFERENCE section
+
+you can also usually find the default config in /etc/joy2uinput/ to look at examples
+
+.SH REPORTING BUGS/IMPROVEMENTS:
+Send them to me on github!
+
+https://github.com/lexbailey/joy2uinput/issues
+
+Feel free to open an issue for any bug you find. You can also share your .j2umap files for devices that are not currently in the repo. This will help others have a better out-of-box experience with joy2uinput if they have the same joypad as you.
+
+.SH EVENT NAME REFERENCE
+
+joydev_event: Raw events from joydev devices (used only in .j2umap files) are as follows:
+
+    - button(N)
+    - axis_as_button(N, VAL)
+    - axis(N, MIN, MAX)
+
+    where N is the event ID number, VAL is the exact axis value that triggers the button press, and MIN/MAX are the limits of an axis range
+    it is recommended to use a tool such as joy2u-mapgen to produce these for you, since the numbers can only be determined empirically
+
+joypad_event: Events in the abstract internal namespace (.j2umap files map *to* these, the main config maps *from* these)
+
+    these events are just internal names, as such you can use them as you please
+    - up
+    - down
+    - left
+    - right
+    - start
+    - select
+    - a
+    - b
+    - c
+    - d
+    - w
+    - x
+    - y
+    - z
+    - lshoulder
+    - rshoulder
+    - ltrigger
+    - rtrigger
+    - menu
+    - home
+    - lstick
+    - rstick
+    - plus
+    - minus
+    - custom_button(N)
+
+    where N can be almost none of the natural numbers
+    
+
+uinput_event: The events to be sent to the virtual keyboard or mouse device (these are only used in the main config file)
+
+    These are the most numerous. Linux supports lots of event types, this is only a small subset of linux's support.
+    If you need a button that is supported in linux, but isn't listed here, please open an issue on github (see the
+    bugs/improvements section). Or, even better, send me a pull request! I'll be happy to add extra button names and
+    whatnot.
+
+    - mousebutton(left)
+    - mousebutton(right)
+    - mousebutton(middle)
+    - mousebutton(side)
+    - mousebutton(extra)
+    - mousebutton(forward)
+    - mousebutton(back)
+
+    - key(up)
+    - key(down)
+    - key(left)
+    - key(right)
+    - key(escape) or key(esc)
+    - key(return) or key(enter)
+    - key(space)
+    - key(pageup)
+    - key(pagedown)
+    - key(home)
+    - key(end)
+    - key(delete)
+    - key(tab)
+    - key(lctrl) or key(lcontrol)
+    - key(rctrl) or key(rcontrol)
+    - key(lshift)
+    - key(rshift)
+    - key(lsuper)
+    - key(rsuper)
+    - key(lalt)
+    - key(ralt)
+    - key(menu)
+    - key(volup) or key(volumeup)
+    - key(voldown) or key(volumedown)
+
+    - key(a)
+    - key(b)
+        ...
+    - key(z)
+
+    - key(0)
+    - key(1)
+        ...
+    - key(9)
+
+    - key(f1)
+    - key(f2)
+        ...
+    - key(f24)
+
+    - key(numpad0)
+    - key(numpad1)
+        ...
+    - key(numpad9)
+
+    - key(-)
+    - key(=)
+    - key([)
+    - key(])
+    - key(;)
+    - key(')
+    - key(,)
+    - key(.)
+    - key(/)
+    - key(\\)
+
+.SH SEE ALSO
+joy2u-mapgen(1)
+

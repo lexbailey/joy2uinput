@@ -20,3 +20,10 @@ ioctls = "0.6.1"
 strum = "0.25"
 strum_macros = "0.25"
 nix = {version="0.27.1", features=["term"]}
+
+[profile.release]
+strip = true
+opt-level = "z"
+lto = true
+codegen-units = 1
+
