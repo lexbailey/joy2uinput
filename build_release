@@ -2,7 +2,9 @@
 
 set -e
 
-cargo build --release
+export RUSTUP_TOOLCHAIN=stable
+export CARGO_TARGET_DIR=target
+cargo build --locked --release
 
 PREP_DIR=package_release
 
