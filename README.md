@@ -6,7 +6,7 @@ Works with any software! It presents a virtual keyboard and mouse to the kernel,
 
 ## Installation
 
-TODO: get this packaged in Debian and the Arch linux AUR. (wanna help with this? awesome! see the packaging guide: [PACKAGING.md])
+TODO: get this packaged in Debian and the Arch linux AUR. (wanna help with this? awesome! see the packaging guide: [[PACKAGING.md]])
 
 currently, to install this, you need to clone and build it from scratch (see "Building" section below)
 
