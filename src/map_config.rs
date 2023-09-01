@@ -303,12 +303,12 @@ impl AxisTarget{
                 keys.push(evdev::Key::KEY_RIGHT);
             },
             AxisTarget::UpDown(_) => {
-                keys.push(evdev::Key::KEY_UP);
                 keys.push(evdev::Key::KEY_DOWN);
+                keys.push(evdev::Key::KEY_UP);
             },
             AxisTarget::VolUpDown(_) => {
-                keys.push(evdev::Key::KEY_VOLUMEUP);
                 keys.push(evdev::Key::KEY_VOLUMEDOWN);
+                keys.push(evdev::Key::KEY_VOLUMEUP);
             },
             AxisTarget::MouseX(_) => {},
             AxisTarget::MouseY(_) => {},

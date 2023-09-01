@@ -85,6 +85,8 @@ joydev_event: Raw events from joydev devices (used only in .j2umap files) are as
 joypad_event: Events in the abstract internal namespace (.j2umap files map *to* these, the main config maps *from* these)
 
     these events are just internal names, as such you can use them as you please
+
+    Buttons
     - up
     - down
     - left
@@ -110,6 +112,23 @@ joypad_event: Events in the abstract internal namespace (.j2umap files map *to* 
     - plus
     - minus
     - custom_button(N)
+
+    Axes
+    - leftx
+    - lefty
+    - leftz
+    - rightx
+    - righty
+    - rightz
+    - throttle
+    - brake
+    - scrollx
+    - scrolly
+    - scrollz
+    - roll
+    - pitch
+    - yaw
+    - custom_axis(N)
 
     where N can be almost none of the natural numbers
     

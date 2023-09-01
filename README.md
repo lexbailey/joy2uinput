@@ -117,9 +117,11 @@ Raw events from joydev devices (used only in .j2umap files) are as follows:
     it is recommended to use a tool such as joy2u-mapgen to produce these for you, since the numbers can only be determined empirically
 
 ### joypad_event
- Events in the abstract internal namespace (.j2umap files map *to* these, the main config maps *from* these)
+Events in the abstract internal namespace (.j2umap files map *to* these, the main config maps *from* these)
 
-    these events are just internal names, as such you can use them as you please
+These events are just internal names, as such you can use them as you please
+
+    Buttons
     - up
     - down
     - left
@@ -146,16 +148,33 @@ Raw events from joydev devices (used only in .j2umap files) are as follows:
     - minus
     - custom_button(N)
 
+    Axes
+    - leftx
+    - lefty
+    - leftz
+    - rightx
+    - righty
+    - rightz
+    - throttle
+    - brake
+    - scrollx
+    - scrolly
+    - scrollz
+    - roll
+    - pitch
+    - yaw
+    - custom_axis(N)
+
     where N can be almost none of the natural numbers
     
 
 ### uinput_event
 The events to be sent to the virtual keyboard or mouse device (these are only used in the main config file)
 
-    These are the most numerous. Linux supports lots of event types, this is only a small subset of linux's support.
-    If you need a button that is supported in linux, but isn't listed here, please open an issue on github (see the
-    bugs/improvements section). Or, even better, send me a pull request! I'll be happy to add extra button names and
-    whatnot.
+These are the most numerous. Linux supports lots of event types, this is only a small subset of linux's support.
+If you need a button that is supported in linux, but isn't listed here, please open an issue on github (see the
+bugs/improvements section). Or, even better, send me a pull request! I'll be happy to add extra button names and
+whatnot.
 
     - mousebutton(left)
     - mousebutton(right)
@@ -230,4 +249,22 @@ The events to be sent to the virtual keyboard or mouse device (these are only us
     - axis(updown,M)
     - axis(volupdown,M)
 
-    (where M is a multiplier for controlling the speed of the input)
+    (where M is a multiplier for controlling the speed of the input. M can be negative to invert an axis)
+
+## FAQ
+
+Q. How do I change the sensitivity of the analog inputs when I have them mapped to mouse movement?
+
+A. Change the multiplier value in your `joy2uinput.conf` file. For example: `axis(mousex,10.0)` will move half as fast as `axis(mousex,20.0)`
+
+
+Q. How do I invert an axis output?
+
+A. Change the multiplier value in your `joy2uinput.conf` from positive to negative (or vice versa) For example: `axis(mousex,-10.0)` will be the inverse of `axis(mousex,10.0)`
+
+
+Q. There is no appropriate name in the `joypad_input` list for one of the buttons or axes on my joypad, what should I do?
+
+A1. Use the custom specifier, with a number of your choice. For example `custom_button(0)` or `custom_axis(1)`. You can map this key or axis as normal.
+
+A2. Submit an issue or pull request to the github repo for joy2uinput to get additional names added (if they are generally useful)

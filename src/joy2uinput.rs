@@ -72,7 +72,7 @@ enum Ev{
     Connect(OsString, u32),
     Disconnect(u32),
     Listen(),
-    RawAxis(u16, i32),
+    RawEvent(EventType, u16, i32),
 }
 
 
@@ -382,6 +382,7 @@ fn main() -> Result<(),Fatal> {
     }
 
     let axis_speeds = Arc::new(Mutex::new(HashMap::<_, i32>::new()));
+    let fake_axis_speeds = Arc::new(Mutex::new(HashMap::<_, i32>::new()));
 
     let mut keys = evdev::AttributeSet::new();
     let mut axes = evdev::AttributeSet::new();
@@ -411,6 +412,7 @@ fn main() -> Result<(),Fatal> {
     let poll_axis = Arc::new(Mutex::new(false));
     let (start_poll, recv_start) = std::sync::mpsc::channel::<()>();
     let t_axis_speeds = axis_speeds.clone();
+    let t_fake_axis_speeds = fake_axis_speeds.clone();
     let t_poll_axis = poll_axis.clone();
     let t_poll_send = send.clone();
 
@@ -421,8 +423,26 @@ fn main() -> Result<(),Fatal> {
                 let speeds = {
                     t_axis_speeds.lock().unwrap().clone()
                 };
+                let ax_speeds = {
+                    t_fake_axis_speeds.lock().unwrap().clone()
+                };
                 for (axis, speed) in speeds.iter() {
-                    if let Err(e) = t_poll_send.send(Ev::RawAxis(*axis, *speed)){
+                    if let Err(e) = t_poll_send.send(Ev::RawEvent(EventType::RELATIVE, *axis, *speed)){
+                        eprintln!("Error handling axis input. This is a bug! {}", e);
+                    }
+                }
+                for ((neg, pos), speed) in ax_speeds.iter() {
+                    if let Err(e) = (||->Result<(),std::sync::mpsc::SendError<_>>{
+                        if speed < &0 {
+                            t_poll_send.send(Ev::RawEvent(EventType::KEY, *neg, 1))?;
+                            t_poll_send.send(Ev::RawEvent(EventType::KEY, *neg, 0))?;
+                        }
+                        else if speed > &0{
+                            t_poll_send.send(Ev::RawEvent(EventType::KEY, *pos, 1))?;
+                            t_poll_send.send(Ev::RawEvent(EventType::KEY, *pos, 0))?;
+                        }
+                        Ok(())
+                    })(){
                         eprintln!("Error handling axis input. This is a bug! {}", e);
                     }
                 }
@@ -509,6 +529,21 @@ fn main() -> Result<(),Fatal> {
                                                         }
                                                     }
                                                 }
+                                                else{
+                                                    let keys = a.uinput_keys();
+                                                    let neg = keys[0].code();
+                                                    let pos = keys[1].code();
+                                                    {
+                                                        fake_axis_speeds.lock().unwrap().insert((neg,pos), delta);
+                                                    }
+                                                    if !*poll_axis.lock().unwrap() {
+                                                        *poll_axis.lock().unwrap() = true;
+                                                        if let Err(e) = start_poll.send(()){
+                                                            eprintln!("Internal error: axis event input sender failed. This is a bug! {}", e);
+                                                        }
+                                                    }
+
+                                                }
                                             }
                                             a => {
                                                 eprintln!("Warning: This axis is mapped to a button? Not sure what that means. Target event dropped: {:?}", a);
@@ -542,9 +577,9 @@ fn main() -> Result<(),Fatal> {
                         }
                     }
                 },
-                Ev::RawAxis(code, speed) => {
+                Ev::RawEvent(evty, code, value) => {
                     if let Err(e) = uinput_dev.emit(&[
-                        InputEvent::new(EventType::RELATIVE, code, speed),
+                        InputEvent::new(evty, code, value),
                     ]){
                         eprintln!("Error sending event: {}", e);
                     }
