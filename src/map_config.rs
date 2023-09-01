@@ -262,6 +262,8 @@ pub enum KeyTarget{
     LAlt(),
     RAlt(),
     Menu(),
+    VolUp(),
+    VolDown(),
     // not strictly keys, but they look the same to uinput, so this is fine
     MouseButtonLeft(),
     MouseButtonRight(),
@@ -274,20 +276,84 @@ pub enum KeyTarget{
 
 #[derive(Debug,Clone)]
 pub enum AxisTarget{
-    MouseX(),
-    MouseY(),
-    ScrollX(),
-    ScrollY(),
-    PageUpDown(),
-    LeftRight(),
-    UpDown(),
-    VolUpDown(),
+    MouseX(f32),
+    MouseY(f32),
+    ScrollX(f32),
+    ScrollY(f32),
+    PageUpDown(f32),
+    LeftRight(f32),
+    UpDown(f32),
+    VolUpDown(f32),
 }
 
 #[derive(Debug,Clone)]
 pub enum Target{
     Key(KeyTarget),
     Axis(AxisTarget),
+}
+
+impl AxisTarget{
+    pub fn uinput_keys(&self) -> Vec<evdev::Key> {
+        let mut keys = Vec::new();
+        match self{
+            AxisTarget::PageUpDown(_) => {
+                keys.push(evdev::Key::KEY_PAGEUP);
+                keys.push(evdev::Key::KEY_PAGEDOWN);
+            },
+            AxisTarget::LeftRight(_) => {
+                keys.push(evdev::Key::KEY_LEFT);
+                keys.push(evdev::Key::KEY_RIGHT);
+            },
+            AxisTarget::UpDown(_) => {
+                keys.push(evdev::Key::KEY_UP);
+                keys.push(evdev::Key::KEY_DOWN);
+            },
+            AxisTarget::VolUpDown(_) => {
+                keys.push(evdev::Key::KEY_VOLUMEUP);
+                keys.push(evdev::Key::KEY_VOLUMEDOWN);
+            },
+            AxisTarget::MouseX(_) => {},
+            AxisTarget::MouseY(_) => {},
+            AxisTarget::ScrollX(_) => {},
+            AxisTarget::ScrollY(_) => {},
+        }
+        keys
+    }
+
+    pub fn uinput_axis(&self) -> Option<evdev::RelativeAxisType> {
+        match self{
+            AxisTarget::PageUpDown(_) => None,
+            AxisTarget::LeftRight(_) => None,
+            AxisTarget::UpDown(_) => None,
+            AxisTarget::VolUpDown(_) => None,
+            AxisTarget::MouseX(_) => {
+                Some(evdev::RelativeAxisType::REL_X)
+            },
+            AxisTarget::MouseY(_) => {
+                Some(evdev::RelativeAxisType::REL_Y)
+            },
+            AxisTarget::ScrollX(_) => {
+                Some(evdev::RelativeAxisType::REL_HWHEEL)
+            },
+            AxisTarget::ScrollY(_) => {
+                Some(evdev::RelativeAxisType::REL_WHEEL)
+            },
+        }
+    }
+
+    pub fn multiplier(&self) -> f32{
+        match self{
+            AxisTarget::PageUpDown(m) => *m,
+            AxisTarget::LeftRight(m) => *m,
+            AxisTarget::UpDown(m) => *m,
+            AxisTarget::VolUpDown(m) => *m,
+            AxisTarget::MouseX(m) => *m,
+            AxisTarget::MouseY(m) => *m,
+            AxisTarget::ScrollX(m) => *m,
+            AxisTarget::ScrollY(m) => *m,
+        }
+
+    }
 }
 
 impl KeyTarget{
@@ -315,6 +381,8 @@ impl KeyTarget{
             KeyTarget::LAlt() => evdev::Key::KEY_LEFTALT,
             KeyTarget::RAlt() => evdev::Key::KEY_RIGHTALT,
             KeyTarget::Menu() => evdev::Key::KEY_MENU,
+            KeyTarget::VolUp() => evdev::Key::KEY_VOLUMEUP,
+            KeyTarget::VolDown() => evdev::Key::KEY_VOLUMEDOWN,
             KeyTarget::MouseButtonLeft() => evdev::Key::BTN_LEFT,
             KeyTarget::MouseButtonRight() => evdev::Key::BTN_RIGHT,
             KeyTarget::MouseButtonMiddle() => evdev::Key::BTN_MIDDLE,
@@ -472,6 +540,8 @@ impl FromStr for KeyTarget{
                         "lalt" => Ok(KeyTarget::LAlt()),
                         "ralt" => Ok(KeyTarget::RAlt()),
                         "menu" => Ok(KeyTarget::Menu()),
+                        "volup" | "volumeup" => Ok(KeyTarget::VolUp()),
+                        "voldown" | "volumedown" => Ok(KeyTarget::VolDown()),
                         a => {
                             if a.len() == 1{
                                 Ok(KeyTarget::AlphaNum(a.chars().next().unwrap()))
@@ -511,20 +581,26 @@ impl FromStr for AxisTarget{
             return Err(format!("Invalid axis target specifier: {}", s));
         }
         else{
-            let args = parse_args(&l[4..], 1);
+            let args = parse_args(&l[4..], 2);
             match args{
                 Err(e) => {Err(format!("Malformed arguments to key target specifier: {}. {}", s, e))},
                 Ok (args) => {
-                    match args[0] {
-                        "mousex" => Ok(AxisTarget::MouseX()),
-                        "mousey" => Ok(AxisTarget::MouseY()),
-                        "scrollx" => Ok(AxisTarget::ScrollX()),
-                        "scrolly" => Ok(AxisTarget::ScrollY()),
-                        "pageupdown" => Ok(AxisTarget::PageUpDown()),
-                        "leftright" => Ok(AxisTarget::LeftRight()),
-                        "updown" => Ok(AxisTarget::UpDown()),
-                        "volupdown" => Ok(AxisTarget::VolUpDown()),
-                        _ => Err(format!("Invalid axis target specifier: {}", s)),
+                    let mult = args[1].trim().parse::<f32>().or_else(|_|{args[1].trim().parse::<i32>().map(|a|a as f32)});
+                    match mult{
+                        Err(e) => {Err(format!("Malformed arguments to key target specifier: {}. Argument 2 should be a float", s))},
+                        Ok(mult) => {
+                            match args[0] {
+                                "mousex" => Ok(AxisTarget::MouseX(mult)),
+                                "mousey" => Ok(AxisTarget::MouseY(mult)),
+                                "scrollx" => Ok(AxisTarget::ScrollX(mult)),
+                                "scrolly" => Ok(AxisTarget::ScrollY(mult)),
+                                "pageupdown" => Ok(AxisTarget::PageUpDown(mult)),
+                                "leftright" => Ok(AxisTarget::LeftRight(mult)),
+                                "updown" => Ok(AxisTarget::UpDown(mult)),
+                                "volupdown" => Ok(AxisTarget::VolUpDown(mult)),
+                                _ => Err(format!("Invalid axis target specifier: {}", s)),
+                            }
+                        }
                     }
                 },
             }

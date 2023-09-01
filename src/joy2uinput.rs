@@ -18,6 +18,7 @@ use std::path::PathBuf;
 use std::fmt::Debug;
 use inotify::{ Inotify, WatchMask, EventMask };
 use std::sync::mpsc::Sender;
+use std::sync::{Arc,Mutex};
 use std::ffi::OsString;
 use std::collections::HashMap;
 use std::thread::JoinHandle;
@@ -70,6 +71,7 @@ enum Ev{
     Connect(OsString, u32),
     Disconnect(OsString, u32),
     Listen(),
+    RawAxis(u16, i32),
 }
 
 
@@ -377,18 +379,56 @@ fn main() -> Result<(),Fatal> {
         }
     }
 
+    let axis_speeds = Arc::new(Mutex::new(HashMap::<_, i32>::new()));
+
     let mut keys = evdev::AttributeSet::new();
+    let mut axes = evdev::AttributeSet::new();
     for (jp, mapping) in expanded_mappings.iter(){
         for (from, (from2, to)) in mapping.iter(){
             match to{
-                Target::Key(k) => {keys.insert(k.uinput_key());}
+                Target::Key(k) => {
+                    keys.insert(k.uinput_key());
+                }
                 Target::Axis(a) => {
-                    todo!()
+                    let akeys = a.uinput_keys();
+                    for key in akeys{
+                        keys.insert(key);
+                    }
+                    let aaxes = a.uinput_axis();
+                    for axis in aaxes{
+                        axes.insert(axis);
+                        axis_speeds.lock().unwrap().insert(axis.0, 0);
+                    }
                 }
             }
         }
     }
-    let mut uinput_dev = evdev::uinput::VirtualDeviceBuilder::new()?.name("joy2udev").with_keys(&keys)?.build()?;
+
+    let mut uinput_dev = evdev::uinput::VirtualDeviceBuilder::new()?.name("joy2udev").with_keys(&keys)?.with_relative_axes(&axes)?.build()?;
+
+    let poll_axis = Arc::new(Mutex::new(false));
+    let (start_poll, recv_start) = std::sync::mpsc::channel::<()>();
+    let t_axis_speeds = axis_speeds.clone();
+    let t_poll_axis = poll_axis.clone();
+    let t_poll_send = send.clone();
+
+    // thread that consumes zero energy while no axis is moving
+    let _axis_poll_thread = std::thread::spawn(move||{
+        for ev in recv_start{
+            loop{
+                let speeds = {
+                    t_axis_speeds.lock().unwrap().clone()
+                };
+                for (axis, speed) in speeds.iter() {
+                    t_poll_send.send(Ev::RawAxis(*axis, *speed));
+                }
+                std::thread::sleep(Duration::from_millis(20));
+                if !(*t_poll_axis.lock().unwrap()){
+                    break;
+                }
+            }
+        }
+    });
 
     loop{
         match recv.recv(){
@@ -448,7 +488,27 @@ fn main() -> Result<(),Fatal> {
                             joydev::EventType::Axis | joydev::EventType::AxisSynthetic => {
                                 match pad.mapping.get(&JDCId::Axis(ev.number())){
                                     Some((JDEv::Axis(n,min,max), target)) => {
-                                        eprintln!("TODO: {:?}", target);
+                                        match target {
+                                            Target::Axis(a) => {
+                                                let val = ev.value();
+                                                let speed = if val < 0 {(val as f32) / (-*min as f32)} else {(val as f32) / (*max as f32)};
+                                                let mult = a.multiplier();
+                                                let delta = (speed * mult).round() as i32;
+                                                if let Some(code) = a.uinput_axis(){
+                                                    {
+                                                        axis_speeds.lock().unwrap().insert(code.0, delta);
+                                                    }
+                                                    if !*poll_axis.lock().unwrap() {
+                                                        *poll_axis.lock().unwrap() = true;
+                                                        start_poll.send(());
+                                                    }
+                                                }
+                                            }
+                                            a => {
+                                                eprintln!("Warning: This axis is mapped to a button? Not sure what that means. Target event dropped: {:?}", a);
+                                            },
+                                        }
+                                        
                                     },
                                     _ => {
                                         match pad.mapping.get(&JDCId::AxisAsButton(ev.number(), ev.value())) {
@@ -461,7 +521,9 @@ fn main() -> Result<(),Fatal> {
                                                             InputEvent::new(EventType::KEY, code, 0),
                                                         ]);
                                                     },
-                                                    _ => {},
+                                                    a => {
+                                                        eprintln!("Warning: This button is mapped to an axis? Not sure what that means. Target event dropped: {:?}", a);
+                                                    },
                                                 }
                                             },
                                             _ => {},
@@ -472,6 +534,14 @@ fn main() -> Result<(),Fatal> {
                         }
                     }
                 },
+                Ev::RawAxis(code, speed) => {
+                    uinput_dev.emit(&[
+                        InputEvent::new(EventType::RELATIVE, code, speed),
+                    ]);
+                    if axis_speeds.lock().unwrap().values().all(|&a|a==0){
+                        *poll_axis.lock().unwrap() = false;
+                    }
+                }
                 Ev::Listen() => {
                     listening = true;
                 }
