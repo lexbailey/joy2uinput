@@ -65,8 +65,6 @@ pub enum Button{
     Minus(),
 
     Custom(u128),
-
-    Unmappable(),
 }
 
 #[derive(Debug,Clone,PartialEq,Eq,Hash)]
@@ -587,7 +585,7 @@ impl FromStr for AxisTarget{
                 Ok (args) => {
                     let mult = args[1].trim().parse::<f32>().or_else(|_|{args[1].trim().parse::<i32>().map(|a|a as f32)});
                     match mult{
-                        Err(e) => {Err(format!("Malformed arguments to key target specifier: {}. Argument 2 should be a float", s))},
+                        Err(_) => {Err(format!("Malformed arguments to key target specifier: {}. Argument 2 should be a float", s))},
                         Ok(mult) => {
                             match args[0] {
                                 "mousex" => Ok(AxisTarget::MouseX(mult)),

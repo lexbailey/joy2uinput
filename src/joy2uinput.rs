@@ -27,12 +27,11 @@ use std::fs::OpenOptions;
 use std::os::fd::AsRawFd;
 use std::time::Duration;
 mod map_config;
-use map_config::{JDEv, Button, Axis, JoyInput, Target};
+use map_config::{JDEv, JoyInput, Target};
 use joydev::GenericEvent;
 use std::fs::File;
 use std::rc::Rc;
 use std::io::BufRead;
-use evdev::Key as EDKey;
 use evdev::{InputEvent, EventType};
 
 const conf_dir_env_var: &'static str = "JOY2UINPUT_CONFDIR";
@@ -59,17 +58,10 @@ fn get_user_conf_dir() -> Option<PathBuf>{
     None
 }
 
-#[derive(Debug,Default,Clone,Copy)]
-struct AxisMotion{
-    min: i16,
-    max: i16,
-    n_events: u64,
-}
-
 enum Ev{
     Joy(u32, joydev::Event),
     Connect(OsString, u32),
-    Disconnect(OsString, u32),
+    Disconnect(u32),
     Listen(),
     RawAxis(u16, i32),
 }
@@ -105,7 +97,7 @@ fn hotplug_thread(evs: Sender<Ev>) -> Option<std::thread::JoinHandle<()>> {
                                     let res = match event.mask {
                                         EventMask::CREATE => { evs.send(Ev::Connect(path.into(), id)) },
                                         EventMask::ATTRIB => { evs.send(Ev::Connect(path.into(), id)) },
-                                        EventMask::DELETE => { evs.send(Ev::Disconnect(path.into(), id)) },
+                                        EventMask::DELETE => { evs.send(Ev::Disconnect(id)) },
                                         _ => unreachable!()
                                     };
                                     if let Err(e) = res {
@@ -178,7 +170,6 @@ fn read_mappings(path: &PathBuf, mappings: &mut HashMap<OsString, HashMap<JDEv, 
                             }
                             let mut this_map = HashMap::new();
                             let path = f.path();
-                            let name = path.file_stem().unwrap();
                             if !mappings.contains_key(path.file_name().unwrap().into()){ // only if not already loaded this joypad
                                 if let Ok(file) = OpenOptions::new().read(true).open(&path) {
                                     let mut line_num = 0;
@@ -279,7 +270,7 @@ enum JDCId{
 
 #[derive(Debug)]
 struct ConnectedPad{
-    name: String,
+    #[allow(dead_code)] // because we don't want to drop the File
     file: File,
     mapping: Rc<HashMap<JDCId, (JDEv,Target)>>,
     join: JoinHandle<()>,
@@ -311,7 +302,7 @@ fn main() -> Result<(),Fatal> {
 
     let mut outmap = None;
     let mut valid = true;
-    let mut valid2 = true;
+    let mut valid2;
 
     if let Some(user_conf_dir) = get_user_conf_dir(){
         valid &= read_mappings(&user_conf_dir, &mut mappings);
@@ -385,8 +376,8 @@ fn main() -> Result<(),Fatal> {
 
     let mut keys = evdev::AttributeSet::new();
     let mut axes = evdev::AttributeSet::new();
-    for (jp, mapping) in expanded_mappings.iter(){
-        for (from, (from2, to)) in mapping.iter(){
+    for (_jp, mapping) in expanded_mappings.iter(){
+        for (_from, (_from2, to)) in mapping.iter(){
             match to{
                 Target::Key(k) => {
                     keys.insert(k.uinput_key());
@@ -397,7 +388,7 @@ fn main() -> Result<(),Fatal> {
                         keys.insert(key);
                     }
                     let aaxes = a.uinput_axis();
-                    for axis in aaxes{
+                    if let Some(axis) = aaxes{
                         axes.insert(axis);
                         axis_speeds.lock().unwrap().insert(axis.0, 0);
                     }
@@ -416,13 +407,15 @@ fn main() -> Result<(),Fatal> {
 
     // thread that consumes zero energy while no axis is moving
     let _axis_poll_thread = std::thread::spawn(move||{
-        for ev in recv_start{
+        for _ev in recv_start{
             loop{
                 let speeds = {
                     t_axis_speeds.lock().unwrap().clone()
                 };
                 for (axis, speed) in speeds.iter() {
-                    t_poll_send.send(Ev::RawAxis(*axis, *speed));
+                    if let Err(e) = t_poll_send.send(Ev::RawAxis(*axis, *speed)){
+                        eprintln!("Error handling axis input. This is a bug! {}", e);
+                    }
                 }
                 std::thread::sleep(Duration::from_millis(20));
                 if !(*t_poll_axis.lock().unwrap()){
@@ -441,7 +434,6 @@ fn main() -> Result<(),Fatal> {
                         let t = pad_thread(send.clone(), &Path::new(&s));
                         match t{
                             Ok((name, file, join)) => {
-                                let fname = map_config::jpname_to_filename(&name);
                                 let mapping = expanded_mappings.get(&map_config::jpname_to_filename(&name)).cloned();
                                 if mapping.is_none(){
                                     eprintln!("Warning: There is no mapping file for the joypad: {}", name);
@@ -450,7 +442,6 @@ fn main() -> Result<(),Fatal> {
                                 else{
                                     let mapping = mapping.unwrap();
                                     pads.insert(id,ConnectedPad{
-                                        name,
                                         file,
                                         mapping,
                                         join,
@@ -462,12 +453,12 @@ fn main() -> Result<(),Fatal> {
                     }
                     _wait_thread = Some(listen_after(send.clone(), 200));
                 },
-                Ev::Disconnect(s, id) => {
+                Ev::Disconnect(id) => {
                     let pad = pads.remove(&id);
                     if pad.is_none(){
                         continue;
                     }
-                    pad.unwrap().join.join();
+                    let _ = pad.unwrap().join.join();
                 },
                 Ev::Joy(dev, ev) => {
                     if listening {
@@ -481,7 +472,9 @@ fn main() -> Result<(),Fatal> {
                                 if let Some((_, target)) = pad.mapping.get(&JDCId::Button(ev.number())){
                                     match target {
                                         Target::Key(k) => {
-                                            uinput_dev.emit(&[InputEvent::new(EventType::KEY, k.uinput_key().code(), ev.value().into())]);
+                                            if let Err(e) = uinput_dev.emit(&[InputEvent::new(EventType::KEY, k.uinput_key().code(), ev.value().into())]){
+                                                eprintln!("Error sending event: {}", e);
+                                            }
                                         },
                                         _ => {},
                                     }
@@ -489,7 +482,7 @@ fn main() -> Result<(),Fatal> {
                             },
                             joydev::EventType::Axis | joydev::EventType::AxisSynthetic => {
                                 match pad.mapping.get(&JDCId::Axis(ev.number())){
-                                    Some((JDEv::Axis(n,min,max), target)) => {
+                                    Some((JDEv::Axis(_n,min,max), target)) => {
                                         match target {
                                             Target::Axis(a) => {
                                                 let val = ev.value();
@@ -502,7 +495,9 @@ fn main() -> Result<(),Fatal> {
                                                     }
                                                     if !*poll_axis.lock().unwrap() {
                                                         *poll_axis.lock().unwrap() = true;
-                                                        start_poll.send(());
+                                                        if let Err(e) = start_poll.send(()){
+                                                            eprintln!("Internal error: axis event input sender failed. This is a bug! {}", e);
+                                                        }
                                                     }
                                                 }
                                             }
@@ -518,10 +513,12 @@ fn main() -> Result<(),Fatal> {
                                                 match target {
                                                     Target::Key(k) => {
                                                         let code = k.uinput_key().code();
-                                                        uinput_dev.emit(&[
+                                                        if let Err(e) = uinput_dev.emit(&[
                                                             InputEvent::new(EventType::KEY, code, 1),
                                                             InputEvent::new(EventType::KEY, code, 0),
-                                                        ]);
+                                                        ]){
+                                                            eprintln!("Error sending event: {}", e);
+                                                        }
                                                     },
                                                     a => {
                                                         eprintln!("Warning: This button is mapped to an axis? Not sure what that means. Target event dropped: {:?}", a);
@@ -537,9 +534,11 @@ fn main() -> Result<(),Fatal> {
                     }
                 },
                 Ev::RawAxis(code, speed) => {
-                    uinput_dev.emit(&[
+                    if let Err(e) = uinput_dev.emit(&[
                         InputEvent::new(EventType::RELATIVE, code, speed),
-                    ]);
+                    ]){
+                        eprintln!("Error sending event: {}", e);
+                    }
                     if axis_speeds.lock().unwrap().values().all(|&a|a==0){
                         *poll_axis.lock().unwrap() = false;
                     }
