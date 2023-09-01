@@ -19,7 +19,7 @@ If you want to change emulated keyboard/mouse events from the defaults, edit joy
 joy2uinput searches for user config and mapping files in the following directories in this order, loading only the first one it finds:
 
     1. (the directory specified in the environment variable JOY2UINPUT_CONFDIR)
-    2. ~/.config/joy2uinput/
+    2. $XDG_CONFIG_HOME/joy2uinput/ (if $XDG_CONFIG_HOME is non-empty, otherwise ~/.config/joy2uinput/)
     3. /opt/joy2uinput/
 
 additionally, it will always load any mapping files, and possibly the default config file, from the following directory:

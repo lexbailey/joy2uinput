@@ -45,6 +45,15 @@ fn get_user_conf_dir() -> Option<PathBuf>{
         }
         return Some(dir);
     }
+    if let Ok(d) = std::env::var("XDG_CONFIG_HOME"){
+        if d != ""{
+            let mut dir = PathBuf::from(&d);
+            dir.push("joy2uinput");
+            if dir.is_dir(){
+                return Some(dir);
+            }
+        }
+    }
     if let Some(mut home) = dirs::home_dir(){
         home.push(".config/joy2uinput/");
         if home.is_dir(){

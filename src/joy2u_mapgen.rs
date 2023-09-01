@@ -30,6 +30,13 @@ fn get_user_conf_dir() -> (PathBuf, bool){
     if let Ok(d) = std::env::var(conf_dir_env_var){
         return (PathBuf::from(&d), true);
     }
+    if let Ok(d) = std::env::var("XDG_CONFIG_HOME"){
+        if d != ""{
+            let mut buf = PathBuf::from(&d);
+            buf.push("joy2uinput");
+            return (buf, false);
+        }
+    }
     if let Some(mut home) = dirs::home_dir(){
         home.push(".config/joy2uinput/");
         return (home, false)
@@ -313,12 +320,9 @@ fn main() -> Result<(),Fatal> {
                         }
                         if success {
                             println!("Config file written!");
+                            return Ok(())
                         }
-                        println!("");
-                        println!("To continue, use the keyboard:");
-                        println!("Press 'a' to map more buttons on this joypad.");
-                        println!("Press 'n' to map another joypad.");
-                        println!("Press 'q' to quit.");
+                        return Err(Fatal::Msg("Failed".to_string()));
                     },
                     Err(e) => { println!("Failed to write to config file: {}, {}", filename.display(), e); },
                 }
@@ -389,18 +393,6 @@ fn main() -> Result<(),Fatal> {
                         b' ' => {
                             // Skip this button
                             next!();
-                        },
-                        b'a' => {
-                            // Add more buttons to a config
-                            todo!();
-                        },
-                        b'n' => {
-                            // Start a new config
-                            cur_dev = None;
-                            mapping_path = None;
-                            config.clear();
-                            next_map = 0;
-                            println!("To start generating a config, press any button on the joypad to configure.");
                         },
                         b'q' | b'\x1b' => {
                             // Quit
