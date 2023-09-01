@@ -219,4 +219,15 @@ The events to be sent to the virtual keyboard or mouse device (these are only us
     - key(,)
     - key(.)
     - key(/)
-    - key(\\)
+    - key(\)
+
+    - axis(mousex,M)
+    - axis(mousey,M)
+    - axis(scrollx,M)
+    - axis(scrolly,M)
+    - axis(pageupdown,M)
+    - axis(leftright,M)
+    - axis(updown,M)
+    - axis(volupdown,M)
+
+    (where M is a multiplier for controlling the speed of the input)
