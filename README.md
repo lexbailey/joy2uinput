@@ -257,11 +257,13 @@ Q. How do I change the sensitivity of the analog inputs when I have them mapped 
 
 A. Change the multiplier value in your `joy2uinput.conf` file. For example: `axis(mousex,10.0)` will move half as fast as `axis(mousex,20.0)`
 
+---------
 
 Q. How do I invert an axis output?
 
 A. Change the multiplier value in your `joy2uinput.conf` from positive to negative (or vice versa) For example: `axis(mousex,-10.0)` will be the inverse of `axis(mousex,10.0)`
 
+---------
 
 Q. There is no appropriate name in the `joypad_input` list for one of the buttons or axes on my joypad, what should I do?
 
