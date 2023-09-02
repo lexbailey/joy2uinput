@@ -270,3 +270,9 @@ Q. There is no appropriate name in the `joypad_input` list for one of the button
 A1. Use the custom specifier, with a number of your choice. For example `custom_button(0)` or `custom_axis(1)`. You can map this key or axis as normal.
 
 A2. Submit an issue or pull request to the github repo for joy2uinput to get additional names added (if they are generally useful)
+
+---------
+
+Q. I had to generate a mapping for my joypad because it didn't work out of the box. Would you like it?
+
+A. Yes! Thankyou! Open an issue or pull request on the github repo for joy2uinput. Be sure to share the brand and model of controller, so I can check some information about it and make sure the .j2umap file looks okay.
