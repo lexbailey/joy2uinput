@@ -113,8 +113,8 @@ Raw events from joydev devices (used only in .j2umap files) are as follows:
     - axis_as_button(N, VAL)
     - axis(N, MIN, MAX)
 
-    where N is the event ID number, VAL is the exact axis value that triggers the button press, and MIN/MAX are the limits of an axis range
-    it is recommended to use a tool such as joy2u-mapgen to produce these for you, since the numbers can only be determined empirically
+where N is the event ID number, VAL is the exact axis value that triggers the button press, and MIN/MAX are the limits of an axis range
+it is recommended to use a tool such as joy2u-mapgen to produce these for you, since the numbers can only be determined empirically
 
 ### joypad_event
 Events in the abstract internal namespace (.j2umap files map *to* these, the main config maps *from* these)
@@ -165,7 +165,7 @@ These events are just internal names, as such you can use them as you please
     - yaw
     - custom_axis(N)
 
-    where N can be almost none of the natural numbers
+where N can be almost none of the natural numbers
     
 
 ### uinput_event
@@ -249,7 +249,7 @@ whatnot.
     - axis(updown,M)
     - axis(volupdown,M)
 
-    (where M is a multiplier for controlling the speed of the input. M can be negative to invert an axis)
+(where M is a multiplier for controlling the speed of the input. M can be negative to invert an axis)
 
 ## FAQ
 
