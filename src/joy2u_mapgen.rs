@@ -143,31 +143,51 @@ fn listen_after(evs: Sender<Ev>, msecs: u64) -> JoinHandle<()> {
 }
 
 fn main() -> Result<(),Fatal> {
-    println!("joy2u_mapgen - generate a mapping file for joy2uinput");
-    println!("");
 
-    let (user_conf_dir, is_from_env) = get_user_conf_dir();
+    let args: Vec<String> = std::env::args().collect();
 
-    if !user_conf_dir.is_dir() {
-        let r = std::fs::create_dir_all(&user_conf_dir);
-        match r{
-            Ok(_) => {},
-            Err(e) => {
-                let mut err = format!("config path is not a directory and could not be made into a directory: {} failed to create directory: {}", user_conf_dir.display(), e);
-                if is_from_env{
-                    err += &(format!("\nNote: config path was set by environment variable: {}", conf_dir_env_var));
-                }
-                return Err(Fatal::Msg(err));
-            }
+    let mut debug_mode = false;
+    for arg in &args[1..]{
+        if arg == "--debug" {
+            debug_mode = true;
+        }
+        else{
+            println!("Warning: ignored arugment: {}", arg);
         }
     }
 
-    println!("Generated configuration will be output to `{}`", user_conf_dir.display());
-    if is_from_env{
-        println!("Note: config path was set by environment variable: {}", conf_dir_env_var);
+    if debug_mode{
+        println!("joy2u_mapgen (debug mode)");
+        println!("dumping all events for connected joypads...");
+        println!("");
+    }
+    else{
+        println!("joy2u_mapgen - generate a mapping file for joy2uinput");
+        println!("");
     }
 
+    let (user_conf_dir, is_from_env) = get_user_conf_dir();
 
+    if !debug_mode{
+        if !user_conf_dir.is_dir() {
+            let r = std::fs::create_dir_all(&user_conf_dir);
+            match r{
+                Ok(_) => {},
+                Err(e) => {
+                    let mut err = format!("config path is not a directory and could not be made into a directory: {} failed to create directory: {}", user_conf_dir.display(), e);
+                    if is_from_env{
+                        err += &(format!("\nNote: config path was set by environment variable: {}", conf_dir_env_var));
+                    }
+                    return Err(Fatal::Msg(err));
+                }
+            }
+        }
+
+        println!("Generated configuration will be output to `{}`", user_conf_dir.display());
+        if is_from_env{
+            println!("Note: config path was set by environment variable: {}", conf_dir_env_var);
+        }
+    }
 
     let (send, recv) = std::sync::mpsc::channel::<Ev>();
     let _hp_thread = hotplug_thread(send.clone());
@@ -217,11 +237,13 @@ fn main() -> Result<(),Fatal> {
 
     let mut pads = HashMap::new();
     
-    println!("");
-    println!("{} devices currently connected", n_pads);
-    println!("");
-    println!("To start generating a config, press any button on the joypad to configure.");
-    println!("");
+    if !debug_mode{
+        println!("");
+        println!("{} devices currently connected", n_pads);
+        println!("");
+        println!("To start generating a config, press any button on the joypad to configure.");
+        println!("");
+    }
 
     let mut listening = false;
     let mut _wait_thread = None;
@@ -389,6 +411,7 @@ fn main() -> Result<(),Fatal> {
                     }
                 },
                 Ev::Key(b) => {
+                    if debug_mode {continue;}
                     match b {
                         b' ' => {
                             // Skip this button
@@ -402,9 +425,23 @@ fn main() -> Result<(),Fatal> {
                     }
                 },
                 Ev::Joy(dev, ev) => {
+                    use joydev::GenericEvent;
                     if listening {
                         let pad = pads.get(&dev);
                         if pad.is_none(){
+                            continue;
+                        }
+                        if debug_mode {
+                            println!("{}: {}", pad.unwrap().0,
+                                match ev.type_(){
+                                    joydev::EventType::Button | joydev::EventType::ButtonSynthetic => {
+                                        format!("button({}) value {}", ev.number(), ev.value())
+                                    },
+                                    joydev::EventType::Axis | joydev::EventType::AxisSynthetic => {
+                                        format!("axis({}, _, _) value {}", ev.number(), ev.value())
+                                    },
+                                }
+                            );
                             continue;
                         }
                         let (name, _file, _joinhandle) = pad.unwrap();
@@ -413,7 +450,6 @@ fn main() -> Result<(),Fatal> {
                             if &dev == cdev{
                                 // Do a mapping thing (maybe)
                                 let n = &to_map[next_map];
-                                use joydev::GenericEvent;
                                 match n{
                                     JoyInput::Button(_) => {
                                         match ev.type_() {
@@ -462,6 +498,7 @@ fn main() -> Result<(),Fatal> {
                     }
                 },
                 Ev::JoyAxisSettled() => {
+                    if debug_mode {continue;}
                     let _ = motion_check_thread.take().unwrap().join();
                     let event = get_settled_event!();
                     if event.is_none(){
