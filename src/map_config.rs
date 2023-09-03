@@ -15,6 +15,7 @@ use std::fmt::Formatter;
 use std::ffi::OsString;
 
 fn parse_args(s: &str, n: usize) -> Result<Vec<&str>, String> {
+    let s = s.trim();
     if s.len() < 2{
         return Err(format!("Malformed arguments: {}.", s));
     }
@@ -22,7 +23,7 @@ fn parse_args(s: &str, n: usize) -> Result<Vec<&str>, String> {
         return Err(format!("Malformed arguments: {}.", s));
     }
     let inner = &s[1..s.len()-1];
-    let args: Vec<_> = inner.split(',').collect();
+    let args: Vec<_> = inner.split(',').map(str::trim).collect();
     if args.len() != n{
         return Err(format!("Expected {} args, found {}", n, args.len()));
     }
@@ -231,12 +232,10 @@ impl FromStr for Button{
             "minus" => Ok(Button::Minus()),
             _ => {
                 if l.starts_with("custom_button"){
-                    let args = l[13..].trim();
-                    if args.starts_with("(") && args.ends_with(")"){
-                        let n: Result<u128,_> = args[1..args.len()-1].parse();
-                        if let Ok(n) = n{
-                            return Ok(Button::Custom(n));
-                        }
+                    let args = parse_args(&l[13..],1)?;
+                    let n: Result<u128,_> = args[0].parse();
+                    if let Ok(n) = n{
+                        return Ok(Button::Custom(n));
                     }
                 	return Err(format!("Invalid custom button specifier: {}. Please use 'custom_button(n)' for some natural number 'n'", s))
                 }
@@ -676,6 +675,7 @@ impl FromStr for AxisTarget{
 impl FromStr for Target{
     type Err = String;
     fn from_str(s: &str) -> Result<Self, <Self as FromStr>::Err> {
+        let s = s.trim();
         let l = s.to_lowercase();
         if l.starts_with("key"){
             return Ok(Target::Key(s.parse()?));
@@ -816,6 +816,7 @@ impl FromStr for TargetMapping{
         }
 	}
 }
+
 pub fn jpname_to_filename(jp: &str) -> OsString{
     let mut s = OsString::from(jp
         .replace("_", "___")
@@ -838,27 +839,30 @@ mod test{
     #[test]
     fn test_map_reading() {
         let tests = [
-            ("button(1)=a", Ok(Mapping{from:JDEv::Button(1),to:JoyInput::Button(Button::A())})),
-            ("button(2)=lstick	   ", Ok(Mapping{from:JDEv::Button(2),to:JoyInput::Button(Button::LStick())})),
-            ("axIS_As_buTToN(1,-32767) =  uP", Ok(Mapping{from:JDEv::AxisAsButton(1,-32767),to:JoyInput::Button(Button::Up())})),
-            ("   axis(1,-32767,32767) = leftx  ", Ok(Mapping{from:JDEv::Axis(1,-32767,32767),to:JoyInput::Axis(Axis::LeftX())})),
+            ("button(1)=a", "button(1) = a", Ok(Mapping{from:JDEv::Button(1),to:JoyInput::Button(Button::A())})),
+            ("button(2)=lstick	   ", "button(2) = lstick", Ok(Mapping{from:JDEv::Button(2),to:JoyInput::Button(Button::LStick())})),
+            ("axIS_As_buTToN(1, -32767) =  uP", "axis_as_button(1,-32767) = up", Ok(Mapping{from:JDEv::AxisAsButton(1,-32767),to:JoyInput::Button(Button::Up())})),
+            ("   axis(1,-32767,  32767) = leftx  ", "axis(1,-32767,32767) = leftx", Ok(Mapping{from:JDEv::Axis(1,-32767,32767),to:JoyInput::Axis(Axis::LeftX())})),
         ];
-        for (input, expected) in tests{
+        for (input, canonical, expected) in tests{
             let mapping = input.parse::<Mapping>();
             assert_eq!(mapping, expected);
+            assert_eq!(format!("{}", mapping.unwrap()), canonical);
         }
     }
 
     #[test]
     fn test_config_reading() {
         let tests = [
-            ("A=key(a)", Ok(TargetMapping{from:JoyInput::Button(Button::A()), to:Target::Key(KeyTarget::AlphaNum('a'))})),
-            ("Custom_button(1)=key(b)", Ok(TargetMapping{from:JoyInput::Button(Button::Custom(1)), to:Target::Key(KeyTarget::AlphaNum('b'))})),
-            ("LeftX=axis(mousex,2)", Ok(TargetMapping{from:JoyInput::Axis(Axis::LeftX()), to:Target::Axis(AxisTarget::MouseX(2.0))})),
+            ("  A =key(a)", "a", Ok(TargetMapping{from:JoyInput::Button(Button::A()), to:Target::Key(KeyTarget::AlphaNum('a'))})),
+            ("Custom_button  (  1  ) =     key( b) ", "custom_button(1)", Ok(TargetMapping{from:JoyInput::Button(Button::Custom(1)), to:Target::Key(KeyTarget::AlphaNum('b'))})),
+            ("LeftX=axis(moUSex,2)", "leftx", Ok(TargetMapping{from:JoyInput::Axis(Axis::LeftX()), to:Target::Axis(AxisTarget::MouseX(2.0))})),
         ];
-        for (input, expected) in tests{
+        for (input, canonical, expected) in tests{
             let mapping = input.parse::<TargetMapping>();
             assert_eq!(mapping, expected);
+            let mapping = mapping.unwrap();
+            assert_eq!(format!("{}", mapping.from), canonical);
         }
     }
 }
