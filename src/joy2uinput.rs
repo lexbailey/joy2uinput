@@ -588,12 +588,9 @@ fn main() -> Result<(),Fatal> {
                                                 match target {
                                                     Target::Key(k) => {
                                                         let code = k.uinput_key().code();
-                                                        if let Err(e) = uinput_dev.emit(&[
-                                                            InputEvent::new(EventType::KEY, code, 1),
-                                                            InputEvent::new(EventType::KEY, code, 0),
-                                                        ]){
-                                                            eprintln!("Error sending event: {}", e);
-                                                        }
+                                                        // Can't group these because that doesn't work when a mouse press and mouse release event are both sent in one group (I don't know why)
+                                                        if let Err(e) = uinput_dev.emit(&[ InputEvent::new(EventType::KEY, code, 1), ]){ eprintln!("Error sending event: {}", e); }
+                                                        if let Err(e) = uinput_dev.emit(&[ InputEvent::new(EventType::KEY, code, 0), ]){ eprintln!("Error sending event: {}", e); }
                                                     },
                                                     Target::Axis(a) => {
                                                         eprintln!("Warning: Unable to map this button to its axis target because the device models the button as an axis. Target event dropped: {:?}\nFor an explanation of why this happens, see the github issue here: https://github.com/lexbailey/joy2uinput/issues/2", a);
