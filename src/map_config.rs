@@ -904,4 +904,34 @@ mod test{
             assert!(t.parse::<TargetMapping>().is_err(), "{}", t);
         }
     }
+
+    #[test]
+    fn sort_targets(){
+        let inputs = [
+            JoyInput::Button(Button::B()),
+            JoyInput::Axis(Axis::Throttle()),
+            JoyInput::Button(Button::A()),
+            JoyInput::Axis(Axis::Throttle()),
+            JoyInput::Axis(Axis::LeftX()),
+            JoyInput::Button(Button::Custom(1)),
+            JoyInput::Button(Button::Up()),
+            JoyInput::Button(Button::Left()),
+            JoyInput::Button(Button::Right()),
+            JoyInput::Button(Button::Down()),
+        ];
+        let mut v: Vec<_> = Vec::from(inputs);
+        v.sort();
+        assert_eq!(v, [
+            JoyInput::Button(Button::Up()),
+            JoyInput::Button(Button::Down()),
+            JoyInput::Button(Button::Left()),
+            JoyInput::Button(Button::Right()),
+            JoyInput::Button(Button::A()),
+            JoyInput::Button(Button::B()),
+            JoyInput::Button(Button::Custom(1)),
+            JoyInput::Axis(Axis::LeftX()),
+            JoyInput::Axis(Axis::Throttle()),
+            JoyInput::Axis(Axis::Throttle()),
+        ]);
+    }
 }
