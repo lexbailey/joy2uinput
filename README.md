@@ -249,6 +249,8 @@ whatnot.
     - axis(updown,M)
     - axis(volupdown,M)
 
+    - toggle_enabled (not actually a uinput event, maps a button to enable or disable all other mappings)
+
 (where M is a multiplier for controlling the speed of the input. M can be negative to invert an axis)
 
 ## FAQ
