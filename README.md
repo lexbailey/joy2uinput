@@ -278,3 +278,9 @@ A2. Submit an issue or pull request to the github repo for joy2uinput to get add
 Q. I had to generate a mapping for my joypad because it didn't work out of the box. Would you like it?
 
 A. Yes! Thankyou! Open an issue or pull request on the github repo for joy2uinput. Be sure to share the brand and model of controller, so I can check some information about it and make sure the .j2umap file looks okay.
+
+---------
+
+Q. I have two joypads connected, but one of them has an axis inverted and the other doesn't. what's going on?
+
+A. Ahhh, sorry about that, it's probably a mistake in a mapping file. It happens. Have a look for the mapping file for your controller in the appropriate config directory, copy that file to your user config directory if it's not already there, then edit the file to swap the min and max values for the axis around. for example `axis(lefty,-32767,32767)` becomes `axis(lefty,32767,-32767)`. If there is a mistake in a default mapping file, please open an issue on the github page and I'll try and fix it.
