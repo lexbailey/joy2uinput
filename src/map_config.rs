@@ -299,7 +299,7 @@ impl FromStr for JoyInput{
     }
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq)]
 pub enum KeyTarget{
     Up(),
     Down(),
@@ -338,7 +338,7 @@ pub enum KeyTarget{
     MouseButtonBack(),
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq)]
 pub enum AxisTarget{
     MouseX(f32),
     MouseY(f32),
@@ -350,7 +350,7 @@ pub enum AxisTarget{
     VolUpDown(f32),
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq)]
 pub enum Target{
     Key(KeyTarget),
     Axis(AxisTarget),
@@ -789,7 +789,7 @@ impl FromStr for Mapping{
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq)]
 pub struct TargetMapping{
     pub from: JoyInput,
     pub to: Target,
@@ -824,4 +824,26 @@ pub fn jpname_to_filename(jp: &str) -> OsString{
     );
     s.push(".j2umap");
     s
+}
+
+mod test{
+    use crate::map_config::{TargetMapping,JoyInput,Target,KeyTarget,Button,Axis,AxisTarget};
+
+    #[test]
+    fn test_name_conversion() {
+        assert_eq!(crate::map_config::jpname_to_filename("awkward_device/joypad\\n"), "awkward___device__-joypad_-_n.j2umap");
+    }
+
+    #[test]
+    fn test_config_reading() {
+        let tests = [
+            ("A=key(a)", Ok(TargetMapping{from:JoyInput::Button(Button::A()), to:Target::Key(KeyTarget::AlphaNum('a'))})),
+            ("Custom_button(1)=key(b)", Ok(TargetMapping{from:JoyInput::Button(Button::Custom(1)), to:Target::Key(KeyTarget::AlphaNum('b'))})),
+            ("LeftX=axis(mousex,2)", Ok(TargetMapping{from:JoyInput::Axis(Axis::LeftX()), to:Target::Axis(AxisTarget::MouseX(2.0))})),
+        ];
+        for (input, expected) in tests{
+            let mapping = input.parse::<TargetMapping>();
+            assert_eq!(mapping, expected);
+        }
+    }
 }
