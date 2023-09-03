@@ -826,6 +826,7 @@ pub fn jpname_to_filename(jp: &str) -> OsString{
     s
 }
 
+#[cfg(test)]
 mod test{
     use crate::map_config::{TargetMapping,JoyInput,Target,KeyTarget,Button,Axis,AxisTarget};
 
