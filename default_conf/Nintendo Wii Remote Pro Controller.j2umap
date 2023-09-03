@@ -18,6 +18,6 @@ button(6) = ltrigger
 button(7) = rtrigger
 
 axis(0,-32767,32767) = leftx
-axis(1,-32767,32767) = lefty
+axis(1,32767,-32767) = lefty
 axis(2,-32767,32767) = rightx
 axis(3,-32767,32767) = righty
