@@ -403,6 +403,7 @@ fn main() -> Result<(),Fatal> {
                         axis_speeds.lock().unwrap().insert(axis.0, 0);
                     }
                 }
+                Target::ToggleEnabled() => {}
             }
         }
     }
@@ -468,6 +469,8 @@ fn main() -> Result<(),Fatal> {
         }
     }
 
+    let mut enabled = true;
+
     loop{
         match recv.recv(){
             Ok(msg) => match msg {
@@ -515,18 +518,27 @@ fn main() -> Result<(),Fatal> {
                                 if let Some((_, target)) = pad.mapping.get(&JDCId::Button(ev.number())){
                                     match target {
                                         Target::Key(k) => {
-                                            if let Err(e) = uinput_dev.emit(&[InputEvent::new(EventType::KEY, k.uinput_key().code(), ev.value().into())]){
-                                                eprintln!("Error sending event: {}", e);
+                                            if enabled{
+                                                if let Err(e) = uinput_dev.emit(&[InputEvent::new(EventType::KEY, k.uinput_key().code(), ev.value().into())]){
+                                                    eprintln!("Error sending event: {}", e);
+                                                }
                                             }
                                         },
                                         Target::Axis(a) => {
-                                            let val = ev.value();
-                                            let speed = val as f32;
-                                            let mult = a.multiplier();
-                                            let delta = (speed * mult).round() as i32;
-                                            if let Some(code) = a.uinput_axis(){
-                                                set_speed!(code, delta);
-                                            } 
+                                            if enabled{
+                                                let val = ev.value();
+                                                let speed = val as f32;
+                                                let mult = a.multiplier();
+                                                let delta = (speed * mult).round() as i32;
+                                                if let Some(code) = a.uinput_axis(){
+                                                    set_speed!(code, delta);
+                                                } 
+                                            }
+                                        },
+                                        Target::ToggleEnabled() => {
+                                            if ev.value() != 0{
+                                                enabled = !enabled;
+                                            }
                                         },
                                     }
                                 }
@@ -536,31 +548,36 @@ fn main() -> Result<(),Fatal> {
                                     Some((JDEv::Axis(_n,min,max), target)) => {
                                         match target {
                                             Target::Axis(a) => {
-                                                let val = ev.value();
-                                                let speed = if val < 0 {(val as f32) / (-*min as f32)} else {(val as f32) / (*max as f32)};
-                                                let mult = a.multiplier();
-                                                let delta = (speed * mult).round() as i32;
-                                                if let Some(code) = a.uinput_axis(){
-                                                    set_speed!(code, delta);
-                                                }
-                                                else{
-                                                    let keys = a.uinput_keys();
-                                                    let neg = keys[0].code();
-                                                    let pos = keys[1].code();
-                                                    {
-                                                        fake_axis_speeds.lock().unwrap().insert((neg,pos), delta);
+                                                if enabled{
+                                                    let val = ev.value();
+                                                    let speed = if val < 0 {(val as f32) / (-*min as f32)} else {(val as f32) / (*max as f32)};
+                                                    let mult = a.multiplier();
+                                                    let delta = (speed * mult).round() as i32;
+                                                    if let Some(code) = a.uinput_axis(){
+                                                        set_speed!(code, delta);
                                                     }
-                                                    if !*poll_axis.lock().unwrap() {
-                                                        *poll_axis.lock().unwrap() = true;
-                                                        if let Err(e) = start_poll.send(()){
-                                                            eprintln!("Internal error: axis event input sender failed. This is a bug! {}", e);
+                                                    else{
+                                                        let keys = a.uinput_keys();
+                                                        let neg = keys[0].code();
+                                                        let pos = keys[1].code();
+                                                        {
+                                                            fake_axis_speeds.lock().unwrap().insert((neg,pos), delta);
                                                         }
-                                                    }
+                                                        if !*poll_axis.lock().unwrap() {
+                                                            *poll_axis.lock().unwrap() = true;
+                                                            if let Err(e) = start_poll.send(()){
+                                                                eprintln!("Internal error: axis event input sender failed. This is a bug! {}", e);
+                                                            }
+                                                        }
 
+                                                    }
                                                 }
                                             }
-                                            a => {
+                                            Target::Key(a) => {
                                                 eprintln!("Warning: This axis is mapped to a button? Not sure what that means. Target event dropped: {:?}", a);
+                                            },
+                                            Target::ToggleEnabled() => {
+                                                eprintln!("Warning: This axis is mapped to toggle enabled? Not sure what that means.");
                                             },
                                         }
                                         
@@ -578,9 +595,12 @@ fn main() -> Result<(),Fatal> {
                                                             eprintln!("Error sending event: {}", e);
                                                         }
                                                     },
-                                                    a => {
+                                                    Target::Axis(a) => {
                                                         eprintln!("Warning: Unable to map this button to its axis target because the device models the button as an axis. Target event dropped: {:?}\nFor an explanation of why this happens, see the github issue here: https://github.com/lexbailey/joy2uinput/issues/2", a);
                                                     },
+                                                    Target::ToggleEnabled() => {
+                                                        enabled = !enabled;
+                                                    }
                                                 }
                                             },
                                             _ => {},

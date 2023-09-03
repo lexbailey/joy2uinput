@@ -288,6 +288,7 @@ pub enum AxisTarget{
 pub enum Target{
     Key(KeyTarget),
     Axis(AxisTarget),
+    ToggleEnabled(),
 }
 
 impl AxisTarget{
@@ -618,6 +619,9 @@ impl FromStr for Target{
         }
         if l.starts_with("axis"){
             return Ok(Target::Axis(s.parse()?));
+        }
+        if l.trim() == "toggle_enabled"{
+            return Ok(Target::ToggleEnabled());
         }
         Err(format!("Unrecognised uinput target specifier: {}", s))
     }
