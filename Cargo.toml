@@ -12,14 +12,14 @@ name="joy2u-mapgen"
 path="src/joy2u_mapgen.rs"
 
 [dependencies]
-evdev = "0.12.1"
-joydev = "0.3.1"
-dirs = "5.0.1"
-inotify = "0.10.2"
-ioctls = "0.6.1"
-strum = "0.25"
-strum_macros = "0.25"
-nix = {version="0.27.1", features=["term"]}
+evdev = "^0.12.1"
+joydev = "^0.3.1"
+dirs = "^5.0.1"
+inotify = "^0.10.2"
+ioctls = "^0.6.1"
+strum = "^0.25"
+strum_macros = "^0.25"
+nix = {version="^0.27.1", features=["term"]}
 
 [profile.release]
 strip = true
