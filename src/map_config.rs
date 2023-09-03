@@ -29,7 +29,7 @@ fn parse_args(s: &str, n: usize) -> Result<Vec<&str>, String> {
     Ok(args)
 }
 
-#[derive(Debug,Clone,PartialEq,Eq,Hash)]
+#[derive(Debug,Clone,PartialEq,Eq,Hash,Ord)]
 pub enum Button{
     Up(),
     Down(),
@@ -67,7 +67,45 @@ pub enum Button{
     Custom(u128),
 }
 
-#[derive(Debug,Clone,PartialEq,Eq,Hash)]
+impl Button {
+    fn as_number(&self) -> u128 {
+        match self{
+            Button::Up() => 0,
+            Button::Down() => 1,
+            Button::Left() => 2,
+            Button::Right() => 3,
+            Button::Start() => 4,
+            Button::Select() => 5,
+            Button::A() => 6,
+            Button::B() => 7,
+            Button::C() => 8,
+            Button::D() => 9,
+            Button::W() => 10,
+            Button::X() => 11,
+            Button::Y() => 12,
+            Button::Z() => 13,
+            Button::LShoulder() => 14,
+            Button::RShoulder() => 15,
+            Button::LTrigger() => 16,
+            Button::RTrigger() => 17,
+            Button::Menu() => 18,
+            Button::Home() => 19,
+            Button::LStick() => 20,
+            Button::RStick() => 21,
+            Button::Plus() => 22,
+            Button::Minus() => 23,
+            Button::Custom(n) => n + 24,
+        }
+    }
+}
+
+impl PartialOrd for Button{
+    fn partial_cmp(&self, other: &Button) -> Option<std::cmp::Ordering> {
+        self.as_number().partial_cmp(&other.as_number())
+    }
+}
+
+#[derive(Debug,Clone,PartialEq,Eq,Hash,Ord)]
 pub enum Axis{
     LeftX(),
     LeftY(),
@@ -90,7 +128,35 @@ pub enum Axis{
 	Custom(u128),
 }
 
-#[derive(Debug,Clone,PartialEq,Eq,Hash)]
+impl Axis{
+    fn as_number(&self) -> u128 {
+        match self{
+            Axis::LeftX() => 0,
+            Axis::LeftY() => 1,
+            Axis::LeftZ() => 2,
+            Axis::RightX() => 3,
+            Axis::RightY() => 4,
+            Axis::RightZ() => 5,
+            Axis::Throttle() => 6,
+            Axis::Brake() => 7,
+            Axis::ScrollX() => 8,
+            Axis::ScrollY() => 9,
+            Axis::ScrollZ() => 10,
+            Axis::Roll() => 11,
+            Axis::Pitch() => 12,
+            Axis::Yaw() => 13,
+	        Axis::Custom(n) => n+14,
+        }
+    }
+}
+
+impl PartialOrd for Axis{
+    fn partial_cmp(&self, other: &Axis) -> Option<std::cmp::Ordering> {
+        self.as_number().partial_cmp(&other.as_number())
+    }
+}
+
+#[derive(Debug,Clone,PartialEq,Eq,Hash,PartialOrd,Ord)]
 pub enum JoyInput{
     Button(Button),
     Axis(Axis),
@@ -627,7 +693,7 @@ impl FromStr for Target{
     }
 }
 
-#[derive(Debug,PartialEq,Eq,Hash,Clone)]
+#[derive(Debug,PartialEq,Eq,Hash,Clone,PartialOrd,Ord)]
 pub enum JDEv{
     Button(u8),
     AxisAsButton(u8, i16),

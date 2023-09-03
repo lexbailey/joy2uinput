@@ -332,7 +332,9 @@ fn main() -> Result<(),Fatal> {
                             success = false;
                         }
                         else{
-                            for (from, &to) in config.iter(){
+                            let mut vconf: Vec<_> = config.iter().map(|(f,t)|(t,f)).collect();
+                            vconf.sort();
+                            for (&to, from) in vconf{
                                 if let Err(e) = writeln!(f, "{}", map_config::Mapping{from:from.clone(),to:to.clone()}){
                                     println!("Failed to write to file: {}", e);
                                     success = false;
