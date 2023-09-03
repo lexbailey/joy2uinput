@@ -872,6 +872,23 @@ mod test{
     }
 
     #[test]
+    fn test_bad_map_reading(){
+        let badtests = [
+            "A=A",
+            "=A",
+            "",
+            "1=custom_button",
+            "(a)=custom_button()",
+            "(0)=custom_button(test)",
+            "_=custom_button(-)",
+            " =custom_button(1)",
+        ];
+        for t in badtests{
+            assert!(t.parse::<Mapping>().is_err(), "{}", t);
+        }
+    }
+
+    #[test]
     fn test_bad_config_reading() {
         let badtests = [
             "A =",
