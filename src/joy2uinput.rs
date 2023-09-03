@@ -454,6 +454,20 @@ fn main() -> Result<(),Fatal> {
         }
     });
 
+    macro_rules! set_speed {
+        ($code:expr, $delta:expr) => {
+            {
+                axis_speeds.lock().unwrap().insert($code.0, $delta);
+            }
+            if !*poll_axis.lock().unwrap() {
+                *poll_axis.lock().unwrap() = true;
+                if let Err(e) = start_poll.send(()){
+                    eprintln!("Internal error: axis event input sender failed. This is a bug! {}", e);
+                }
+            }
+        }
+    }
+
     loop{
         match recv.recv(){
             Ok(msg) => match msg {
@@ -505,7 +519,15 @@ fn main() -> Result<(),Fatal> {
                                                 eprintln!("Error sending event: {}", e);
                                             }
                                         },
-                                        _ => {},
+                                        Target::Axis(a) => {
+                                            let val = ev.value();
+                                            let speed = val as f32;
+                                            let mult = a.multiplier();
+                                            let delta = (speed * mult).round() as i32;
+                                            if let Some(code) = a.uinput_axis(){
+                                                set_speed!(code, delta);
+                                            } 
+                                        },
                                     }
                                 }
                             },
@@ -519,15 +541,7 @@ fn main() -> Result<(),Fatal> {
                                                 let mult = a.multiplier();
                                                 let delta = (speed * mult).round() as i32;
                                                 if let Some(code) = a.uinput_axis(){
-                                                    {
-                                                        axis_speeds.lock().unwrap().insert(code.0, delta);
-                                                    }
-                                                    if !*poll_axis.lock().unwrap() {
-                                                        *poll_axis.lock().unwrap() = true;
-                                                        if let Err(e) = start_poll.send(()){
-                                                            eprintln!("Internal error: axis event input sender failed. This is a bug! {}", e);
-                                                        }
-                                                    }
+                                                    set_speed!(code, delta);
                                                 }
                                                 else{
                                                     let keys = a.uinput_keys();
@@ -565,7 +579,7 @@ fn main() -> Result<(),Fatal> {
                                                         }
                                                     },
                                                     a => {
-                                                        eprintln!("Warning: This button is mapped to an axis? Not sure what that means. Target event dropped: {:?}", a);
+                                                        eprintln!("Warning: Unable to map this button to its axis target because the device models the button as an axis. Target event dropped: {:?}\nFor an explanation of why this happens, see the github issue here: https://github.com/lexbailey/joy2uinput/issues/2", a);
                                                     },
                                                 }
                                             },
