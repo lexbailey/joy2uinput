@@ -8,7 +8,7 @@ on:
 
 jobs:
   check:
-    name: Rust project
+    name: joy2uinput
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -23,7 +23,6 @@ jobs:
       - name: Run cargo-tarpaulin
         uses: actions-rs/tarpaulin@v0.1
         with:
-          version: 'latest'
           args: '-- --test-threads 1'
 
       - name: Upload to codecov.io
