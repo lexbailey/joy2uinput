@@ -611,7 +611,10 @@ impl FromStr for KeyTarget{
                                 Ok(KeyTarget::AlphaNum(a.chars().next().unwrap()))
                             }
                             else{
-                                if a.starts_with("f"){
+                                if a == "equals"{
+                                    Ok(KeyTarget::AlphaNum('='))
+                                }
+                                else if a.starts_with("f"){
                                     let num = a[1..].parse::<u8>();
                                     match num{
                                         Ok(num) => Ok(KeyTarget::F(num)),
@@ -857,12 +860,31 @@ mod test{
             ("  A =key(a)", "a", Ok(TargetMapping{from:JoyInput::Button(Button::A()), to:Target::Key(KeyTarget::AlphaNum('a'))})),
             ("Custom_button  (  1  ) =     key( b) ", "custom_button(1)", Ok(TargetMapping{from:JoyInput::Button(Button::Custom(1)), to:Target::Key(KeyTarget::AlphaNum('b'))})),
             ("LeftX=axis(moUSex,2)", "leftx", Ok(TargetMapping{from:JoyInput::Axis(Axis::LeftX()), to:Target::Axis(AxisTarget::MouseX(2.0))})),
+            ("throttle=mousebutton(side)", "throttle", Ok(TargetMapping{from:JoyInput::Axis(Axis::Throttle()), to:Target::Key(KeyTarget::MouseButtonSide())})),
+            ("throttle=key(equals)", "throttle", Ok(TargetMapping{from:JoyInput::Axis(Axis::Throttle()), to:Target::Key(KeyTarget::AlphaNum('='))})),
         ];
         for (input, canonical, expected) in tests{
             let mapping = input.parse::<TargetMapping>();
             assert_eq!(mapping, expected);
             let mapping = mapping.unwrap();
             assert_eq!(format!("{}", mapping.from), canonical);
+        }
+    }
+
+    #[test]
+    fn test_bad_config_reading() {
+        let badtests = [
+            "A =",
+            "=",
+            "",
+            "custom_button=key",
+            "custom_button()=key()",
+            "custom_button(test)=key(test)",
+            "custom_button(-)=key(a)",
+            "custom_button(1)=key(#-)",
+        ];
+        for t in badtests{
+            assert!(t.parse::<TargetMapping>().is_err(), "{}", t);
         }
     }
 }

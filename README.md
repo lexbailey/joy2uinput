@@ -230,7 +230,7 @@ whatnot.
     - key(numpad9)
 
     - key(-)
-    - key(=)
+    - key(equals)
     - key([)
     - key(])
     - key(;)
