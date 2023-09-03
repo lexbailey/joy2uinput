@@ -755,7 +755,7 @@ impl FromStr for JDEv{
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug,PartialEq)]
 pub struct Mapping{
     pub from: JDEv,
     pub to: JoyInput,
@@ -828,11 +828,25 @@ pub fn jpname_to_filename(jp: &str) -> OsString{
 
 #[cfg(test)]
 mod test{
-    use crate::map_config::{TargetMapping,JoyInput,Target,KeyTarget,Button,Axis,AxisTarget};
+    use crate::map_config::{TargetMapping,JoyInput,Target,KeyTarget,Button,Axis,AxisTarget,JDEv,Mapping};
 
     #[test]
     fn test_name_conversion() {
         assert_eq!(crate::map_config::jpname_to_filename("awkward_device/joypad\\n"), "awkward___device__-joypad_-_n.j2umap");
+    }
+
+    #[test]
+    fn test_map_reading() {
+        let tests = [
+            ("button(1)=a", Ok(Mapping{from:JDEv::Button(1),to:JoyInput::Button(Button::A())})),
+            ("button(2)=lstick	   ", Ok(Mapping{from:JDEv::Button(2),to:JoyInput::Button(Button::LStick())})),
+            ("axIS_As_buTToN(1,-32767) =  uP", Ok(Mapping{from:JDEv::AxisAsButton(1,-32767),to:JoyInput::Button(Button::Up())})),
+            ("   axis(1,-32767,32767) = leftx  ", Ok(Mapping{from:JDEv::Axis(1,-32767,32767),to:JoyInput::Axis(Axis::LeftX())})),
+        ];
+        for (input, expected) in tests{
+            let mapping = input.parse::<Mapping>();
+            assert_eq!(mapping, expected);
+        }
     }
 
     #[test]
