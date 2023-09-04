@@ -897,8 +897,8 @@ mod test{
             "custom_button=key",
             "custom_button()=key()",
             "custom_button(test)=key(test)",
-            "custom_button(-)=key(a)",
-            "custom_button(1)=key(#-)",
+            "custom_axis(-)=key(a)",
+            "custom_axis(1)=key(#-)",
         ];
         for t in badtests{
             assert!(t.parse::<TargetMapping>().is_err(), "{}", t);
@@ -933,5 +933,28 @@ mod test{
             JoyInput::Axis(Axis::Throttle()),
             JoyInput::Axis(Axis::Throttle()),
         ]);
+    }
+
+    #[test]
+    fn axis_targets_have_evdev_codes(){
+        let axis_targets = [
+            "axis(pageupdown, 2)",
+            "axis(leftright  ,2.0)",
+            "axis(updown,2.000)",
+            "axis(  volupdown,002.0)",
+            "axis(mousex,02  )",
+            "axis(mousey,2)",
+            "axis  (scrollx,2)",
+            "axis(scrolly,2)  ",
+        ];
+        for a in axis_targets{
+            let p = a.parse::<AxisTarget>().unwrap();
+            assert_eq!(p.multiplier(), 2.0, "{:?}", p);
+            let axis = p.uinput_axis();
+            if axis.is_none(){
+                let keys = p.uinput_keys();
+                assert_eq!(keys.len(), 2, "{:?}", p);
+            }
+        }
     }
 }
