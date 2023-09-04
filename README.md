@@ -4,6 +4,8 @@ Maps your joypad to your keyboard on linux.
 
 Works with any software! It presents a virtual keyboard and mouse to the kernel, so it doesn't matter if you're using X or Wayland, or something else, it will always work.
 
+[![codecov](https://codecov.io/gh/lexbailey/joy2uinput/graph/badge.svg?token=6P1FPS9APZ)](https://codecov.io/gh/lexbailey/joy2uinput)
+
 ## Installation
 
 TODO: get this packaged in Debian and the Arch linux AUR. (wanna help with this? awesome! see the packaging guide: [PACKAGING.md](PACKAGING.md))
