@@ -235,7 +235,7 @@ whatnot.
     - key(])
     - key(;)
     - key(')
-    - key(,)
+    - key(comma)
     - key(.)
     - key(/)
     - key(\)

@@ -616,6 +616,9 @@ impl FromStr for KeyTarget{
                                 if a == "equals"{
                                     Ok(KeyTarget::AlphaNum('='))
                                 }
+                                else if a == "comma"{
+                                    Ok(KeyTarget::AlphaNum(','))
+                                }
                                 else if a.starts_with("f"){
                                     let num = a[1..].parse::<u8>();
                                     match num{
@@ -948,6 +951,8 @@ mod test{
             "key(numpad0)", "key(numpad1)", "key(numpad2)", "key(numpad3)", "key(numpad4)", "key(numpad5)", "key(numpad6)", "key(numpad7)", "key(numpad8)", "key(numpad9)",
             "key(up)" , "key(down)" , "key(left)" , "key(right)" , "key(escape)" , "key(return)" , "key(space)" , "key(pageup)" , "key(pagedown)" , "key(home)" , "key(end)" , "key(delete)" , "key(tab)" , "key(lctrl)" , "key(rctrl)" , "key(lshift)" , "key(rshift)" ,
             "key(lsuper)" , "key(rsuper)" , "key(lalt)" , "key(ralt)" , "key(menu)" , "key(volup)" , "key(voldown)",
+            "mousebutton(left)", "mousebutton(right)", "mousebutton(middle)", "mousebutton(side)", "mousebutton(extra)", "mousebutton(back)", "mousebutton(forward)",
+            "key(-)", "key(equals)", "key([)", "key(])", "key(;)", "key(')", "key(comma)", "key(.)", "key(/)", "key(\\)",
         ];
         for k in key_targets{
             let p = k.parse::<KeyTarget>().unwrap();
