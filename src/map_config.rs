@@ -528,6 +528,8 @@ impl KeyTarget{
                 '5' => evdev::Key::KEY_5,
                 '6' => evdev::Key::KEY_6,
                 '7' => evdev::Key::KEY_7,
+                '8' => evdev::Key::KEY_8,
+                '9' => evdev::Key::KEY_9,
                 '0' => evdev::Key::KEY_0,
                 '-' => evdev::Key::KEY_MINUS,
                 '=' => evdev::Key::KEY_EQUAL,
@@ -933,6 +935,25 @@ mod test{
             JoyInput::Axis(Axis::Throttle()),
             JoyInput::Axis(Axis::Throttle()),
         ]);
+    }
+
+    #[test]
+    fn key_targets_have_evdev_codes(){
+        let key_targets = [
+            "key(0)", "key(1)", "key(2)", "key(3)", "key(4)", "key(5)", "key(6)", "key(7)", "key(8)", "key(9)",
+            "key(a)", "key(b)", "key(c)", "key(d)", "key(e)", "key(f)", "key(g)", "key(h)", "key(i)", "key(j)", "key(k)", "key(l)", "key(m)",
+            "key(n)", "key(o)", "key(p)", "key(q)", "key(r)", "key(s)", "key(t)", "key(u)", "key(v)", "key(w)", "key(x)", "key(y)", "key(z)",
+            "key(f1)", "key(f2)", "key(f3)", "key(f4)", "key(f5)", "key(f6)", "key(f7)", "key(f8)", "key(f9)", "key(f10)", "key(f11)", "key(f12)",
+            "key(f13)", "key(f14)", "key(f15)", "key(f16)", "key(f17)", "key(f18)", "key(f19)", "key(f20)", "key(f21)", "key(f22)", "key(f23)", "key(f24)",
+            "key(numpad0)", "key(numpad1)", "key(numpad2)", "key(numpad3)", "key(numpad4)", "key(numpad5)", "key(numpad6)", "key(numpad7)", "key(numpad8)", "key(numpad9)",
+            "key(up)" , "key(down)" , "key(left)" , "key(right)" , "key(escape)" , "key(return)" , "key(space)" , "key(pageup)" , "key(pagedown)" , "key(home)" , "key(end)" , "key(delete)" , "key(tab)" , "key(lctrl)" , "key(rctrl)" , "key(lshift)" , "key(rshift)" ,
+            "key(lsuper)" , "key(rsuper)" , "key(lalt)" , "key(ralt)" , "key(menu)" , "key(volup)" , "key(voldown)",
+        ];
+        for k in key_targets{
+            let p = k.parse::<KeyTarget>().unwrap();
+            let code = p.uinput_key();
+            assert_ne!(code, evdev::Key::KEY_RESERVED, "{:?}", p);
+        }
     }
 
     #[test]
