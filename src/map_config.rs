@@ -866,13 +866,16 @@ mod test{
             ("Custom_button  (  1  ) =     key( b) ", "custom_button(1)", Ok(TargetMapping{from:JoyInput::Button(Button::Custom(1)), to:Target::Key(KeyTarget::AlphaNum('b'))})),
             ("LeftX=axis(moUSex,2)", "leftx", Ok(TargetMapping{from:JoyInput::Axis(Axis::LeftX()), to:Target::Axis(AxisTarget::MouseX(2.0))})),
             ("throttle=mousebutton(side)", "throttle", Ok(TargetMapping{from:JoyInput::Axis(Axis::Throttle()), to:Target::Key(KeyTarget::MouseButtonSide())})),
-            ("throttle=key(equals)", "throttle", Ok(TargetMapping{from:JoyInput::Axis(Axis::Throttle()), to:Target::Key(KeyTarget::AlphaNum('='))})),
+            ("Roll=key(equals)", "roll", Ok(TargetMapping{from:JoyInput::Axis(Axis::Roll()), to:Target::Key(KeyTarget::AlphaNum('='))})),
+            ("rightx=toggle_enabled", "rightx", Ok(TargetMapping{from:JoyInput::Axis(Axis::RightX()), to:Target::ToggleEnabled()})),
+            ("righty=axis(scrolly,2)", "righty", Ok(TargetMapping{from:JoyInput::Axis(Axis::RightY()), to:Target::Axis(AxisTarget::ScrollY(2.0))})),
+            ("brake=axis(scrollx,1)", "brake", Ok(TargetMapping{from:JoyInput::Axis(Axis::Brake()), to:Target::Axis(AxisTarget::ScrollX(1.0))})),
         ];
         for (input, canonical, expected) in tests{
             let mapping = input.parse::<TargetMapping>();
-            assert_eq!(mapping, expected);
+            assert_eq!(mapping, expected, "{}", input);
             let mapping = mapping.unwrap();
-            assert_eq!(format!("{}", mapping.from), canonical);
+            assert_eq!(format!("{}", mapping.from), canonical, "{}", input);
         }
     }
 
@@ -904,6 +907,11 @@ mod test{
             "custom_button(test)=key(test)",
             "custom_axis(-)=key(a)",
             "custom_axis(1)=key(#-)",
+            "custom_axis(1)=axis()",
+            "custom_axis(1)=axis",
+            "custom_axis(1)=axis(foo)",
+            "custom_axis(1)=axis(mousex,foo)",
+            "custom_axis(1)=axis(foo,2)",
         ];
         for t in badtests{
             assert!(t.parse::<TargetMapping>().is_err(), "{}", t);
