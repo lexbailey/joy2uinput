@@ -142,7 +142,13 @@ fn listen_after(evs: Sender<Ev>, msecs: u64) -> JoinHandle<()> {
     })
 }
 
-fn main() -> Result<(),Fatal> {
+fn wrapped_main<A>(mut stdout: A) -> Result<(),Fatal> where A: std::io::Write {
+
+    macro_rules! println {
+        () => { write!(stdout, "\n"); };
+        ($fstr:literal) => {{ let _res = write!(stdout, concat!($fstr, "\n")); }};
+        ($fstr:literal, $($arg:tt)*) => {{ let _res = write!(stdout, concat!($fstr, "\n"), $($arg)*); }};
+    }
 
     let args: Vec<String> = std::env::args().collect();
 
@@ -540,4 +546,36 @@ fn main() -> Result<(),Fatal> {
     }
 
     Ok(())
+}
+
+fn main() -> Result<(), Fatal>{
+    wrapped_main(std::io::stdout())
+}
+
+#[cfg(test)]
+mod test{
+
+    #[test]
+    fn test_joypad_map_generation() {
+        // hehe this is gonna be a fun test function
+        // it will:
+        // 1. create a virtual joypad (js0)
+        // 2. spawn a thread to run main(), wait for the normal output
+        // 3. check that the output contained details of js0
+        // 4. connect a new virtual joypad (js1)
+        // 5. check that the output contained details of js1
+        // 6. press a button on js1 to start mapping it
+        // 7. chekck that the output...
+        // 8. map a few buttons, check the output
+        // 9. disconnect js0 mid-mapping of js1
+        // 10. finish mapping js1
+        // 11 check that the config file is correctly generated.
+        // TODO: this function
+
+        // Step 2: spawn main
+        let main_join = std::thread::spawn(move||{
+            //crate::joy2u_mapgen::wrapped_main();
+        });
+    }
+
 }
