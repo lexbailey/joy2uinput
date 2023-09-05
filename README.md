@@ -286,3 +286,32 @@ A. Yes! Thankyou! Open an issue or pull request on the github repo for joy2uinpu
 Q. I have two joypads connected, but one of them has an axis inverted and the other doesn't. what's going on?
 
 A. Ahhh, sorry about that, it's probably a mistake in a mapping file. It happens. Have a look for the mapping file for your controller in the appropriate config directory, copy that file to your user config directory if it's not already there, then edit the file to swap the min and max values for the axis around. for example `axis(lefty,-32767,32767)` becomes `axis(lefty,32767,-32767)`. If there is a mistake in a default mapping file, please open an issue on the github page and I'll try and fix it.
+
+---------
+
+Q I get an error that says "Error: Unable to create virtual input device via uinput: Permission denied"
+
+A.
+First, check that the uinput modlue is actually loaded
+
+    sudo modprobe uinput
+
+If that didn't work, your system probably has restrictive permissions on `/dev/uinput`. This is a good thing in general, but prevents joy2uinput working.
+
+To fix this, first create a user group for users that are allowed to use uinput (and therefore allowed to use joy2uinput)
+
+    sudo groupadd uinput
+
+add yourself to this user group
+
+    sudo usermod -a -G uinput <your user name>
+
+then log out and log in again, so your session picks up the new group
+then allow members of that group to write to `/dev/uinput`
+
+    sudo chmod g+rw /dev/uinput
+    sudo chown root:uinput /dev/uinput
+
+Depending on your config, this might or might not work after the next reboot
+
+TODO: document udev rules

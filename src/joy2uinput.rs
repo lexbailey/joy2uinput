@@ -341,6 +341,10 @@ fn main() -> Result<(),Fatal> {
         return Err(Fatal::Msg("Config invalid".to_string()));
     }
 
+    if outmap.is_none(){
+        return Err(Fatal::Msg("No output mapping config found. Default config is missing from /etc/joy2uinput/joy2uinput.conf. User config dir also does not contain joy2uinput.conf. See documentation for user config dir search order.".to_string()));
+    }
+
     let outmap = outmap.unwrap();
 
     for (k,v) in mappings.iter(){
@@ -408,7 +412,13 @@ fn main() -> Result<(),Fatal> {
         }
     }
 
-    let mut uinput_dev = evdev::uinput::VirtualDeviceBuilder::new()?.name("joy2udev").with_keys(&keys)?.with_relative_axes(&axes)?.build()?;
+    let uinput_dev: Result<evdev::uinput::VirtualDevice,std::io::Error> = (||->_{
+        Ok(evdev::uinput::VirtualDeviceBuilder::new()?.name("joy2udev").with_keys(&keys)?.with_relative_axes(&axes)?.build()?)
+    })();
+    let mut uinput_dev = match uinput_dev {
+        Err(e) => { return Err(Fatal::Msg(format!("Unable to create virtual input device via uinput: {}", e))); },
+        Ok(a) => { a },
+    };
 
     let poll_axis = Arc::new(Mutex::new(false));
     let (start_poll, recv_start) = std::sync::mpsc::channel::<()>();
