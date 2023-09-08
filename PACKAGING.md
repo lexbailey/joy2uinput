@@ -8,9 +8,11 @@ Create three packages
     contains the joy2uinput binary and its man page
     also contains a default /etc/joy2uinput/joy2uinput.conf file that can be modified as appropriate for the platform this is being packaged for
     (if your platform needs to store the default config elsewhere, you might need to modify the config file search logic in the code)
+    ideally, also have installation of this package automatically configure uinput to be loaded and have appropriate permissions (see udev details in FAQ in README.md).
 
     depends on:
         joydev (the kernel module)
+        uinput (also a kernel module)
 
 2. joy2uinput-mappings:
     contains the .j2umap files normally found in /etc/joy2uinput/
@@ -19,6 +21,7 @@ Create three packages
 3. joy2uinput-mapgen:
     contains the joy2u-mapgen binary and its man page
     as with the mappings package, this is not a dependency for joy2uinput, but should be recommended if possible.
+    similar to joy2uinput, installation of this package should make sure that uinput is loaded and has appropriate permissions
 
     depends on:
         this package depends on all the same things as joy2uinput does.

@@ -300,7 +300,7 @@ First, check that the uinput modlue is actually loaded
 
     sudo modprobe uinput
 
-If that didn't work, your system probably has restrictive permissions on `/dev/uinput`. This is a good thing in general, but prevents joy2uinput working.
+If that didn't solve the problem, your system probably has restrictive permissions on `/dev/uinput`. This is a good thing in general, but prevents joy2uinput working.
 
 To fix this, first create a user group for users that are allowed to use uinput (and therefore allowed to use joy2uinput)
 
@@ -310,12 +310,33 @@ add yourself to this user group
 
     sudo usermod -a -G uinput <your user name>
 
-then log out and log in again, so your session picks up the new group
+then log out and log in again, so your session picks up the new group (or reboot, sometimes that's required actually)
+
 then allow members of that group to write to `/dev/uinput`
 
     sudo chmod g+rw /dev/uinput
     sudo chown root:uinput /dev/uinput
 
-Depending on your config, this might or might not work after the next reboot
+Depending on your config, this might or might not work after the next reboot. If it doesn't, you can fix the issue with a udev rule...
 
-TODO: document udev rules
+Assuming your system uses udev (which it probably does), you can install this udev rule to ensure the permissions are set correctly when the uinput module is loaded:
+
+    KERNEL=="uinput", MODE="0660", GROUP="uinput"
+
+(save 60-joy2uinput.rule into /etc/udev/rules.d)
+
+If the uinput module does not already load automatically on system start, you might also want to add `uinput` to a file in `/etc/modules-load.d/`
+
+---------
+
+Q. Why is all this complicated modprobe and udev stuff from the previous question required? I don't like it!
+
+A. I don't like it either, it is inconvenient. But this is why:
+
+The uinput module grants _incredible_ power to any program or user that can access it. Having it open to anyone is a security risk.
+
+It's a common configuration for the kernel to not even load uinput at all, and even when it's loaded, only root can access it. Obviously this configuration is not helpful if you want to use joy2uinput.
+
+Ideally, if joy2uinput is packaged well, then all of this is sorted for you at package install time. But for installing manually, the manual steps might be required.
+
+This is why you need to make sure that 1. uinput is loaded on boot, and that 2. udev applies the right permissions to it when it loads.
