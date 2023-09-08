@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -e
+
+mkdir -p /usr/bin
+mkdir -p /usr/share/man/man1
+mkdir -p /etc/joy2uinput
+
+install package_release/usr/bin/joy2u-mapgen /usr/bin/joy2u-mapgen
+install package_release/usr/bin/joy2uinput /usr/bin/joy2uinput
+install package_release/usr/share/man/man1/joy2u-mapgen.1.gz /usr/share/man/man1/joy2u-mapgen.1.gz
+install package_release/usr/share/man/man1/joy2uinput.1.gz /usr/share/man/man1/joy2uinput.1.gz
+
+# is there a way to use install to do a whole directory!?
+# I don't think so
+cp -- package_release/etc/joy2uinput/* /etc/joy2uinput
+

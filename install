@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -e
+echo ./build_release
+./build_release
+echo sudo ./install
+sudo ./install_package
