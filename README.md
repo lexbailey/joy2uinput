@@ -12,6 +12,10 @@ TODO: get this packaged in Debian and the Arch linux AUR. (wanna help with this?
 
 currently, to install this, you need to clone and build it from scratch (see "Building" section below)
 
+after building you can install it with the install script: `./install`
+
+this works on most linux distros, but not all
+
 ## Running
 
 simply run this command:
