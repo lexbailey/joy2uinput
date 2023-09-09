@@ -27,10 +27,10 @@ use map_config::JDEv;
 const conf_dir_env_var: &'static str = "JOY2UINPUT_CONFDIR";
 
 fn get_user_conf_dir() -> (PathBuf, bool){
-    if let Ok(d) = std::env::var(conf_dir_env_var){
+    if let Some(d) = std::env::var_os(conf_dir_env_var){
         return (PathBuf::from(&d), true);
     }
-    if let Ok(d) = std::env::var("XDG_CONFIG_HOME"){
+    if let Some(d) = std::env::var_os("XDG_CONFIG_HOME"){
         if d != ""{
             let mut buf = PathBuf::from(&d);
             buf.push("joy2uinput");
@@ -624,8 +624,10 @@ mod test{
         for ev in recv{
             println!("{:?}", ev);
             match ev {
-                TestEv::Timeout() => {break;/*panic!("Timeout");*/},
-                TestEv::Line(s) => {println!("{}", s);},
+                TestEv::Timeout() => {panic!("Timeout");},
+                TestEv::Line(s) => {
+                    println!("{}", s);
+                },
             }
         }
     }

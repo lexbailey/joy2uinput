@@ -37,7 +37,7 @@ use evdev::{InputEvent, EventType};
 const conf_dir_env_var: &'static str = "JOY2UINPUT_CONFDIR";
 
 fn get_user_conf_dir() -> Option<PathBuf>{
-    if let Ok(d) = std::env::var(conf_dir_env_var){
+    if let Some(d) = std::env::var_os(conf_dir_env_var){
         let dir = PathBuf::from(&d);
         if !dir.is_dir(){
             eprintln!("Warning: {} does not point to a directory. No user config will be loaded.", conf_dir_env_var);
@@ -45,7 +45,7 @@ fn get_user_conf_dir() -> Option<PathBuf>{
         }
         return Some(dir);
     }
-    if let Ok(d) = std::env::var("XDG_CONFIG_HOME"){
+    if let Some(d) = std::env::var_os("XDG_CONFIG_HOME"){
         if d != ""{
             let mut dir = PathBuf::from(&d);
             dir.push("joy2uinput");
