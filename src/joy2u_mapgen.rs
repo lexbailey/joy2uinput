@@ -554,6 +554,7 @@ fn main() -> Result<(), Fatal>{
 
 #[cfg(test)]
 mod test{
+    use std::io::{Read,Write,Error,ErrorKind};
 
     #[test]
     fn test_joypad_map_generation() {
@@ -570,12 +571,63 @@ mod test{
         // 9. disconnect js0 mid-mapping of js1
         // 10. finish mapping js1
         // 11 check that the config file is correctly generated.
-        // TODO: this function
 
-        // Step 2: spawn main
-        let main_join = std::thread::spawn(move||{
-            //crate::joy2u_mapgen::wrapped_main();
+        #[derive(Debug)]
+        enum TestEv{
+            Timeout(),
+            Line(String),
+        }
+
+        let (send, recv) = std::sync::mpsc::channel();
+        let send1 = send.clone();
+
+        let timeout_join = std::thread::spawn(move||{
+            std::thread::sleep(std::time::Duration::from_secs(5));
+            send1.send(TestEv::Timeout());
         });
+
+        let send2 = send.clone();
+        let (mut stdout, mut t_stdout) = std::os::unix::net::UnixStream::pair().unwrap();
+        // Step 2: spawn main
+        let line_split_thread = std::thread::spawn(move||{
+            let main_join = std::thread::spawn(move||{
+                crate::wrapped_main(t_stdout);
+            });
+
+            let mut line = String::new();
+            for i in 0..20 {
+                let mut b: [u8;100] = [0;100];
+                let r = stdout.read(&mut b);
+                match r{
+                    Err(e) => {
+                        if e.kind() != ErrorKind::Interrupted {
+                            panic!("Failed to read from program stdout");
+                        }
+                    },
+                    Ok(len) => {
+                        let s = String::from_utf8_lossy(&b[0..len]);
+                        for c in s.chars(){
+                            if c == '\n'{
+                                send2.send(TestEv::Line(line.clone()));
+                                line = String::new();
+                            }
+                            else{
+                                line.push(c);
+                            }
+                        }
+                    },
+                }
+            }
+        });
+
+        // TODO: the rest of this function
+        for ev in recv{
+            println!("{:?}", ev);
+            match ev {
+                TestEv::Timeout() => {break;/*panic!("Timeout");*/},
+                TestEv::Line(s) => {println!("{}", s);},
+            }
+        }
     }
 
 }

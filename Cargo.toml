@@ -21,6 +21,9 @@ strum = "^0.25"
 strum_macros = "^0.25"
 nix = {version="^0.27.1", features=["term"]}
 
+[dev-dependencies]
+regex = "1.9.5"
+
 [profile.release]
 strip = true
 opt-level = "z"
