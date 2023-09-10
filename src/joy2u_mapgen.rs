@@ -70,6 +70,7 @@ enum Ev{
     Connect(OsString),
     Disconnect(OsString),
     Listen(),
+    Println(String),
 }
 
 fn hotplug_thread(evs: Sender<Ev>) -> Option<std::thread::JoinHandle<()>> {
@@ -117,7 +118,7 @@ fn pad_thread(evs: Sender<Ev>, s: &Path) -> joydev::Result<(String, std::fs::Fil
     let rfd = fd.as_raw_fd();
     let name = joydev::io_control::get_identifier(rfd).unwrap_or("unknown".to_string());
     let p: OsString = PathBuf::from(s).as_os_str().into();
-    println!("Device connected: {}", name);
+    let _ = evs.send(Ev::Println(format!("Device connected: {}", name)));
     Ok((name.clone(), fd, std::thread::spawn(move ||{
         loop{
             match joydev::io_control::get_event(rfd){
@@ -129,7 +130,7 @@ fn pad_thread(evs: Sender<Ev>, s: &Path) -> joydev::Result<(String, std::fs::Fil
                 _ => {break;}
             }
         }
-        println!("Device diconnected: {}", name);
+        let _ = evs.send(Ev::Println(format!("Device disconnected: {}", name)));
     })))
 }
 
@@ -142,15 +143,13 @@ fn listen_after(evs: Sender<Ev>, msecs: u64) -> JoinHandle<()> {
     })
 }
 
-fn wrapped_main<A>(mut stdout: A) -> Result<(),Fatal> where A: std::io::Write {
+fn wrapped_main<A>(mut stdout: A, args: &Vec<String>) -> Result<(),Fatal> where A: std::io::Write {
 
     macro_rules! println {
         () => { write!(stdout, "\n"); };
         ($fstr:literal) => {{ let _res = write!(stdout, concat!($fstr, "\n")); }};
         ($fstr:literal, $($arg:tt)*) => {{ let _res = write!(stdout, concat!($fstr, "\n"), $($arg)*); }};
     }
-
-    let args: Vec<String> = std::env::args().collect();
 
     let mut debug_mode = false;
     for arg in &args[1..]{
@@ -163,12 +162,12 @@ fn wrapped_main<A>(mut stdout: A) -> Result<(),Fatal> where A: std::io::Write {
     }
 
     if debug_mode{
-        println!("joy2u_mapgen (debug mode)");
+        println!("joy2u-mapgen (debug mode)");
         println!("dumping all events for connected joypads...");
         println!("");
     }
     else{
-        println!("joy2u_mapgen - generate a mapping file for joy2uinput");
+        println!("joy2u-mapgen - generate a mapping file for joy2uinput");
         println!("");
     }
 
@@ -536,10 +535,13 @@ fn wrapped_main<A>(mut stdout: A) -> Result<(),Fatal> where A: std::io::Write {
                             },
                         }
                     }
+                },
+                Ev::Println(s) => {
+                    println!("{}", s);
                 }
                 Ev::Listen() => {
                     listening = true;
-                }
+                },
             }
             _ => {break;}
         }
@@ -549,59 +551,80 @@ fn wrapped_main<A>(mut stdout: A) -> Result<(),Fatal> where A: std::io::Write {
 }
 
 fn main() -> Result<(), Fatal>{
-    wrapped_main(std::io::stdout())
+    let args: Vec<String> = std::env::args().collect();
+    wrapped_main(std::io::stdout(), &args)
 }
 
 #[cfg(test)]
 mod test{
     use std::io::{Read,Write,Error,ErrorKind};
 
-    #[test]
-    fn test_joypad_map_generation() {
-        // hehe this is gonna be a fun test function
-        // it will:
-        // 1. create a virtual joypad (js0)
-        // 2. spawn a thread to run main(), wait for the normal output
-        // 3. check that the output contained details of js0
-        // 4. connect a new virtual joypad (js1)
-        // 5. check that the output contained details of js1
-        // 6. press a button on js1 to start mapping it
-        // 7. chekck that the output...
-        // 8. map a few buttons, check the output
-        // 9. disconnect js0 mid-mapping of js1
-        // 10. finish mapping js1
-        // 11 check that the config file is correctly generated.
+    fn new_virtual_joypad(name: &str) -> evdev::uinput::VirtualDevice {
+        let mut keys = evdev::AttributeSet::new();
+        keys.insert(evdev::Key::BTN_0);
+        keys.insert(evdev::Key::BTN_1);
+        keys.insert(evdev::Key::BTN_2);
+        keys.insert(evdev::Key::BTN_3);
+        keys.insert(evdev::Key::BTN_4);
+        keys.insert(evdev::Key::BTN_5);
+        keys.insert(evdev::Key::BTN_6);
+        keys.insert(evdev::Key::BTN_7);
+        keys.insert(evdev::Key::BTN_8);
+        keys.insert(evdev::Key::BTN_9);
+        keys.insert(evdev::Key::BTN_TRIGGER);
+        keys.insert(evdev::Key::BTN_DPAD_UP);
+        keys.insert(evdev::Key::BTN_DPAD_DOWN);
+        keys.insert(evdev::Key::BTN_DPAD_LEFT);
+        keys.insert(evdev::Key::BTN_DPAD_RIGHT);
 
-        #[derive(Debug)]
-        enum TestEv{
-            Timeout(),
-            Line(String),
-        }
+        let ax_LX = evdev::UinputAbsSetup::new(evdev::AbsoluteAxisType::ABS_X, evdev::AbsInfo::new(0, -100, 100, 0, 0, 1));
+        let ax_LY = evdev::UinputAbsSetup::new(evdev::AbsoluteAxisType::ABS_Y, evdev::AbsInfo::new(0, -100, 100, 0, 0, 1));
+        let ax_RX = evdev::UinputAbsSetup::new(evdev::AbsoluteAxisType::ABS_RX, evdev::AbsInfo::new(0, -100, 100, 0, 0, 1));
+        let ax_RY = evdev::UinputAbsSetup::new(evdev::AbsoluteAxisType::ABS_RY, evdev::AbsInfo::new(0, -100, 100, 0, 0, 1));
+    
+        evdev::uinput::VirtualDeviceBuilder::new()
+            .expect("Failed to make uinput device builder")
+            .name(name)
+            .with_keys(&keys).expect("Failed to add buttons to virtual joystick device")
+            .with_absolute_axis(&ax_LX).expect("Failed to set up absolute axes on virtual joystick device")
+            .with_absolute_axis(&ax_LY).expect("Failed to set up absolute axes on virtual joystick device")
+            .with_absolute_axis(&ax_RX).expect("Failed to set up absolute axes on virtual joystick device")
+            .with_absolute_axis(&ax_RY).expect("Failed to set up absolute axes on virtual joystick device")
+            .build().expect("Failed to build virtual joystick device")
+    }
 
+    #[derive(Debug)]
+    enum TestEv{
+        Timeout(),
+        Line(String),
+    }
+
+    fn spawn_main(args: Vec<String>) -> (std::thread::JoinHandle<()>, std::sync::mpsc::Receiver<TestEv>){
         let (send, recv) = std::sync::mpsc::channel();
         let send1 = send.clone();
 
         let timeout_join = std::thread::spawn(move||{
-            std::thread::sleep(std::time::Duration::from_secs(5));
+            std::thread::sleep(std::time::Duration::from_secs(3));
             send1.send(TestEv::Timeout());
         });
 
         let send2 = send.clone();
-        let (mut stdout, mut t_stdout) = std::os::unix::net::UnixStream::pair().unwrap();
-        // Step 2: spawn main
-        let line_split_thread = std::thread::spawn(move||{
+        let jh = std::thread::spawn(move||{
+            let (mut stdout, mut t_stdout) = std::os::unix::net::UnixStream::pair().unwrap();
             let main_join = std::thread::spawn(move||{
-                crate::wrapped_main(t_stdout);
+                crate::wrapped_main(t_stdout, &args);
             });
 
             let mut line = String::new();
-            for i in 0..20 {
+            stdout.set_read_timeout(Some(std::time::Duration::from_millis(100)));
+            loop {
                 let mut b: [u8;100] = [0;100];
                 let r = stdout.read(&mut b);
                 match r{
                     Err(e) => {
-                        if e.kind() != ErrorKind::Interrupted {
-                            panic!("Failed to read from program stdout");
+                        let k = e.kind();
+                        if k != ErrorKind::Interrupted && k != ErrorKind::WouldBlock && k != ErrorKind::TimedOut{
+                            panic!("Failed to read from program stdout: {}", e);
                         }
                     },
                     Ok(len) => {
@@ -619,17 +642,123 @@ mod test{
                 }
             }
         });
+        (jh,recv)
+    }
 
-        // TODO: the rest of this function
+    macro_rules! next {
+        ($step:ident) => {
+            println!("Step {} complete", $step);
+            $step += 1;
+        }
+    }
+
+    #[test]
+    fn test_joypad_debug_mode() {
+        // 1. create a virtual joypad (js0)
+        let mut js0 = new_virtual_joypad("testing_joystick0");
+        let mut js1 = None;
+
+        // 2. spawn a thread to run main()
+        let args = vec!["joy2u-mapgen".to_string(), "--debug".to_string()];
+        let (stdout_read_thread, mut recv) = spawn_main(args);
+
+        let mut step = 0;
+
+        let mut success = false;
+
         for ev in recv{
-            println!("{:?}", ev);
             match ev {
                 TestEv::Timeout() => {panic!("Timeout");},
                 TestEv::Line(s) => {
                     println!("{}", s);
+                    match step {
+                        0 => {
+                            // 3. wait for the normal output
+                            if s.contains("joy2u-mapgen") && s.contains("debug mode") {
+                                next!(step);
+                            }
+                        },
+                        1 => {
+                            // 4. check that the output contained details of js0
+                            if s.contains("Device connected: testing_joystick0") {
+                                next!(step);
+                                std::thread::sleep(std::time::Duration::from_millis(500)); // first 200ms of events are discarded, so wait a bit
+                                // 5. Press a button on the virtual joypad
+                                js0.emit(&[
+                                    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_TRIGGER.code(), 1),
+                                ]).expect("Emit failed");
+                            }
+                        },
+                        2 => {
+                            // 6. Check button is reported
+                            if s.contains("testing_joystick0: button(0) value 1") {
+                                next!(step);
+                                // 7. release the button
+                                js0.emit(&[
+                                    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_TRIGGER.code(), 0),
+                                ]).expect("Emit failed");
+                            }
+                        },
+                        3 => {
+                            // 8. check button release is reported
+                            if s.contains("testing_joystick0: button(0) value 0") {
+                                next!(step);
+                                // 9. simulate axis input
+                                js0.emit(&[
+                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 50),
+                                ]).expect("Emit failed");
+                            }
+                        },
+                        4 => {
+                            // 10. check axis is reported
+                            if s.contains("testing_joystick0: axis(0, _, _) value ") { // not sure what the value will actually be, because apparently some rescaling happens???? can't find uinput docs aobut this, can't be bothered to read kernel source right now
+                                next!(step);
+                                // 11. axis to rest position
+                                js0.emit(&[
+                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 0),
+                                ]).expect("Emit failed");
+                            }
+                        },
+                        5 => {
+                            // 12. check rest position reported
+                            if s.contains("testing_joystick0: axis(0, _, _) value 0") {
+                                next!(step);
+                                // 13. Connect another joystick
+                                js1 = Some(new_virtual_joypad("testing_joystick1"));
+                            }
+                        },
+                        6 => {
+                            // 14. check the new device is reported as connected
+                            if s.contains("Device connected: testing_joystick1") {
+                                next!(step);
+                                std::thread::sleep(std::time::Duration::from_millis(500)); // first 200ms of events are discarded, so wait a bit
+                                // 15 press a button.
+                                js1.as_mut().unwrap().emit(&[
+                                    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_TRIGGER.code(), 1),
+                                ]).expect("Emit failed");
+                            }
+                        },
+                        7 => {
+                            // 16. check button is reported
+                            if s.contains("testing_joystick1: button(0) value 1") {
+                                next!(step);
+                                // 17. disconnect joystick 1
+                                js1 = None;
+                            }
+                        },
+                        8 => {
+                            // 18. check disconnect is reported
+                            if s.contains("Device disconnected: testing_joystick1") {
+                                // Test complete
+                                success = true;
+                                break;
+                            }
+                        },
+                        _ => {panic!("Unexpected step");},
+                    }
                 },
             }
         }
+        assert!(success, "Something didn't happen in the right sequence");
     }
-
 }
