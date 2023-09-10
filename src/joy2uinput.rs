@@ -682,7 +682,7 @@ mod test{
         let mut fpath = std::path::PathBuf::from(dir_path); fpath.push("joy2uinput.conf");
         let mut conf_file = std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(fpath).unwrap();
         conf_file.write_all(b"up = key(up)\n# test config\n\nleftx = axis(mousex,15)").expect("Failed to write temp config for testing");
-        let mut mpath = std::path::PathBuf::from(dir_path); mpath.push("testing_joystick0.j2umap");
+        let mut mpath = std::path::PathBuf::from(dir_path); mpath.push(crate::map_config::jpname_to_filename("testing_joystick0"));
         let mut map_file = std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(mpath).unwrap();
         map_file.write_all(b"# test mapping\n\nbutton(1) = up\naxis(0,-32767,32767) = leftx").expect("Failed to write temp mapping for testing");
         let args = vec!["joy2uinput".to_string()];
