@@ -658,6 +658,7 @@ mod test_utils;
 #[cfg(test)]
 mod test{
 
+    use std::io::Write;
     use serial_test::serial;
     use crate::test_utils::{TestEv, new_virtual_joypad, spawn_main};
 
@@ -675,6 +676,13 @@ mod test{
         let mut js0 = new_virtual_joypad("testing_joystick0");
 
         // 2. spawn a thread to run main()
+        let tmp_dir = tempdir::TempDir::new("tmp_joy2uinput_conf").expect("failed to create temp dir");
+        let dir_path = tmp_dir.path();
+        std::env::set_var("JOY2UINPUT_CONFDIR", dir_path);
+        let mut fpath = std::path::PathBuf::from(dir_path);
+        fpath.push("joy2uinput.conf");
+        let mut conf_file = std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(fpath).unwrap();
+        conf_file.write_all(b"up = key(up)");
         let args = vec!["joy2uinput".to_string()];
         let (_stdout_read_thread, recv, _timeout_join_handle) = spawn_main(
             move|stdout:std::os::unix::net::UnixStream|{
