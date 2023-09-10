@@ -745,6 +745,7 @@ mod test{
                                 js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 0), ]).expect("Emit failed");
                                 std::thread::sleep(std::time::Duration::from_millis(10));
                                 // 6. disconnect the virtual joypad
+                                std::thread::sleep(std::time::Duration::from_secs(1));
                                 js0 = None;
                             }
                         },
