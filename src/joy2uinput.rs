@@ -681,10 +681,10 @@ mod test{
         std::env::set_var("JOY2UINPUT_CONFDIR", dir_path);
         let mut fpath = std::path::PathBuf::from(dir_path); fpath.push("joy2uinput.conf");
         let mut conf_file = std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(fpath).unwrap();
-        conf_file.write_all(b"up = key(up)").expect("Failed to write temp config for testing");
+        conf_file.write_all(b"up = key(up)\n# test config\n\n").expect("Failed to write temp config for testing");
         let mut mpath = std::path::PathBuf::from(dir_path); mpath.push("testing_joystick0.j2umap");
         let mut map_file = std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(mpath).unwrap();
-        map_file.write_all(b"button(1) = up").expect("Failed to write temp mapping for testing");
+        map_file.write_all(b"# test mapping\n\nbutton(1) = up\naxis(0,-32767,32767) = leftx").expect("Failed to write temp mapping for testing");
         let args = vec!["joy2uinput".to_string()];
         let (_stdout_read_thread, recv, _timeout_join_handle) = spawn_main(
             move|stdout:std::os::unix::net::UnixStream|{
@@ -715,10 +715,41 @@ mod test{
                                     evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_DPAD_RIGHT.code(), 0),
                                 ]).expect("Emit failed");
                                 std::thread::sleep(std::time::Duration::from_millis(100)); // wait for events to be handled
+                                // 5. Wiggle an axis
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 10), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 3000), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 8000), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 14000), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 32768), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 12000), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 6000), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -10), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -1200), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -16000), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -29000), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -32768), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -40000), ]).expect("Emit failed"); // linux is allowed to report non-clamped values, program must not crash when it does
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                js0.as_mut().unwrap().emit(&[ evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 0), ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(10));
+                                // 6. disconnect the virtual joypad
                                 js0 = None;
                             }
                         },
                         1 => {
+                            // 7. check that the program did not crash, and gracefully handled the disconnect.
                             if s.contains("Device disconnected: testing_joystick0") {
                                 success = true;
                                 break;
