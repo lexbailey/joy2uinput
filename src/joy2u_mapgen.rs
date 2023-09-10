@@ -750,7 +750,7 @@ mod test{
                             // 18. check disconnect is reported
                             if s.contains("Device disconnected: testing_joystick1") {
                                 // Test complete
-                                success = true;
+                                success = false;
                                 break;
                             }
                         },
