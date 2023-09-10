@@ -16,11 +16,11 @@ jobs:
           toolchain: stable
           override: true
 
-      - name: Setup upterm session
-        uses: lhotari/action-upterm@v1
+      #- name: Setup upterm session
+      #  uses: lhotari/action-upterm@v1
 
       - name: prepare uinput
-        run: "modprobe uinput"
+        run: "modprobe uinput && sudo chmod 666 /dev/uinput"
 
       - name: Run cargo-tarpaulin
         uses: actions-rs/tarpaulin@v0.1
