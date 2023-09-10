@@ -23,8 +23,34 @@ use std::io::Read;
 use std::os::fd::AsFd;
 pub mod map_config;
 use map_config::JDEv;
+use map_config::{Button, Axis, JoyInput};
 
 const conf_dir_env_var: &'static str = "JOY2UINPUT_CONFDIR";
+
+const to_map: [JoyInput; 18] = [
+        JoyInput::Button(Button::Up()),
+        JoyInput::Button(Button::Down()),
+        JoyInput::Button(Button::Left()),
+        JoyInput::Button(Button::Right()),
+        
+        JoyInput::Button(Button::A()),
+        JoyInput::Button(Button::B()),
+        JoyInput::Button(Button::X()),
+        JoyInput::Button(Button::Y()),
+
+        JoyInput::Button(Button::Start()),
+        JoyInput::Button(Button::Select()),
+    
+        JoyInput::Button(Button::RShoulder()),
+        JoyInput::Button(Button::LShoulder()),
+        JoyInput::Button(Button::RTrigger()),
+        JoyInput::Button(Button::LTrigger()),
+
+        JoyInput::Axis(Axis::LeftX()),
+        JoyInput::Axis(Axis::LeftY()),
+        JoyInput::Axis(Axis::RightX()),
+        JoyInput::Axis(Axis::RightY()),
+    ];
 
 fn get_user_conf_dir() -> (PathBuf, bool){
     if let Some(d) = std::env::var_os(conf_dir_env_var){
@@ -256,33 +282,9 @@ fn wrapped_main<A>(mut stdout: A, args: &Vec<String>) -> Result<(),Fatal> where 
     let mut cur_dev = None;
     let mut mapping_path: Option<PathBuf> = None;
 
-    use map_config::{Button, Axis, JoyInput};
 
     let mut next_map = 0;
-    const to_map: [JoyInput; 18] = [
-        JoyInput::Button(Button::Up()),
-        JoyInput::Button(Button::Down()),
-        JoyInput::Button(Button::Left()),
-        JoyInput::Button(Button::Right()),
-        
-        JoyInput::Button(Button::A()),
-        JoyInput::Button(Button::B()),
-        JoyInput::Button(Button::X()),
-        JoyInput::Button(Button::Y()),
-
-        JoyInput::Button(Button::Start()),
-        JoyInput::Button(Button::Select()),
     
-        JoyInput::Button(Button::RShoulder()),
-        JoyInput::Button(Button::LShoulder()),
-        JoyInput::Button(Button::RTrigger()),
-        JoyInput::Button(Button::LTrigger()),
-
-        JoyInput::Axis(Axis::LeftX()),
-        JoyInput::Axis(Axis::LeftY()),
-        JoyInput::Axis(Axis::RightX()),
-        JoyInput::Axis(Axis::RightY()),
-    ];
 
     let mut config: HashMap<JDEv,&JoyInput> = HashMap::new();
 
@@ -562,16 +564,6 @@ mod test{
 
     fn new_virtual_joypad(name: &str) -> evdev::uinput::VirtualDevice {
         let mut keys = evdev::AttributeSet::new();
-        keys.insert(evdev::Key::BTN_0);
-        keys.insert(evdev::Key::BTN_1);
-        keys.insert(evdev::Key::BTN_2);
-        keys.insert(evdev::Key::BTN_3);
-        keys.insert(evdev::Key::BTN_4);
-        keys.insert(evdev::Key::BTN_5);
-        keys.insert(evdev::Key::BTN_6);
-        keys.insert(evdev::Key::BTN_7);
-        keys.insert(evdev::Key::BTN_8);
-        keys.insert(evdev::Key::BTN_9);
         keys.insert(evdev::Key::BTN_TRIGGER);
         keys.insert(evdev::Key::BTN_DPAD_UP);
         keys.insert(evdev::Key::BTN_DPAD_DOWN);
@@ -781,6 +773,9 @@ mod test{
         let mut js1: Option<evdev::uinput::VirtualDevice> = None;
         let mut success = false;
 
+        use crate::to_map;
+        use crate::JoyInput;
+
         for ev in recv{
             match ev {
                 TestEv::Timeout() => {panic!("Timeout");},
@@ -801,12 +796,87 @@ mod test{
                                 // 5. Press a button on the virtual joypad
                                 js0.emit(&[
                                     evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_TRIGGER.code(), 1),
+                                    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_TRIGGER.code(), 0),
                                 ]).expect("Emit failed");
                             }
                         },
                         2 => {
+                            // 6. Check that we are now mapping js0
+                            if s.contains("Started mapping joypad: testing_joystick0") {
+                                next!(step);
+                            }
                         },
-                        _ => {panic!("Unexpected step");},
+                        _ => {
+                            let step2 = step-3;
+                            if step2 < (2*to_map.len()){
+                                let next_input = &to_map[step2>>1];
+                                if (step2 & 1) == 0 {
+                                    match next_input {
+                                        JoyInput::Button(b) => {
+                                            if s.contains(&format!("Press {}", next_input)) {
+                                                next!(step);
+                                                js0.emit(&[
+                                                    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_DPAD_UP.code(), 1),
+                                                    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_DPAD_UP.code(), 0),
+                                                ]).expect("Emit failed");
+                                            }
+                                        },
+                                        JoyInput::Axis(a) => {
+                                            if s.contains(&format!("Move axis {} quickly to both extremes, then wait", next_input)) {
+                                                next!(step);
+                                                js0.emit(&[
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 0),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 10),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 20),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 30),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 40),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 70),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 80),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 100),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 50),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 20),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -40),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -60),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -100),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -60),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -50),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -30),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, -20),
+                                                    evdev::InputEvent::new(evdev::EventType::ABSOLUTE, evdev::AbsoluteAxisType::ABS_X.0, 0),
+                                                ]).expect("Emit failed");
+                                            }
+                                        },
+                                    }
+                                }
+                                if (step2 & 1) == 1 {
+                                    match next_input {
+                                        JoyInput::Button(b) =>{
+                                            if s.contains(&format!("Button number 1 is '{}'", to_map[step2>>1])) {
+                                                next!(step);
+                                            }
+                                        },
+                                        JoyInput::Axis(a) =>{
+                                            if s.contains(&format!("Axis 0 is '{}' with range ", to_map[step2>>1])) {
+                                                next!(step);
+                                            }
+                                        },
+                                    }
+                                }
+                            }
+                            else{
+                                let step3 = step2 - (to_map.len() * 2);
+                                match step3 {
+                                    0 => {
+                                        if s.contains("Complete!") {
+                                            // TODO check file is corect
+                                            success = true;
+                                            break;
+                                        }
+                                    },
+                                    _ => {panic!("Unexpected step {}", step3);},
+                                }
+                            }
+                        }
                     }
                 },
             }
