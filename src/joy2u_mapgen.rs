@@ -558,6 +558,7 @@ fn main() -> Result<(), Fatal>{
 #[cfg(test)]
 mod test{
     use std::io::{Read,Write,Error,ErrorKind};
+    use serial_test::serial;
 
     fn new_virtual_joypad(name: &str) -> evdev::uinput::VirtualDevice {
         let mut keys = evdev::AttributeSet::new();
@@ -653,6 +654,7 @@ mod test{
     }
 
     #[test]
+    #[serial]
     fn test_joypad_debug_mode() {
         // 1. create a virtual joypad (js0)
         let mut js0 = new_virtual_joypad("testing_joystick0");
@@ -753,6 +755,56 @@ mod test{
                                 success = true;
                                 break;
                             }
+                        },
+                        _ => {panic!("Unexpected step");},
+                    }
+                },
+            }
+        }
+        assert!(success, "Something didn't happen in the right sequence");
+    }
+
+    #[test]
+    #[serial]
+    fn test_joypad_mapping() {
+        // 1. create a virtual joypad (js0)
+        let mut js0 = new_virtual_joypad("testing_joystick0");
+
+        // 2. spawn a thread to run main()
+        let tmp_dir = tempdir::TempDir::new("tmp_joy2uinput_conf").expect("failed to create temp dir");
+        let dir_path = tmp_dir.path();
+        std::env::set_var("JOY2UINPUT_CONFDIR", dir_path);
+        let args = vec!["joy2u-mapgen".to_string()];
+        let (stdout_read_thread, mut recv) = spawn_main(args);
+
+        let mut step = 0;
+        let mut js1: Option<evdev::uinput::VirtualDevice> = None;
+        let mut success = false;
+
+        for ev in recv{
+            match ev {
+                TestEv::Timeout() => {panic!("Timeout");},
+                TestEv::Line(s) => {
+                    println!("{}", s);
+                    match step {
+                        0 => {
+                            // 3. wait for the normal output
+                            if s.contains("joy2u-mapgen") && !s.contains("debug mode") {
+                                next!(step);
+                            }
+                        },
+                        1 => {
+                            // 4. check that the output contained details of js0
+                            if s.contains("Device connected: testing_joystick0") {
+                                next!(step);
+                                std::thread::sleep(std::time::Duration::from_millis(500)); // first 200ms of events are discarded, so wait a bit
+                                // 5. Press a button on the virtual joypad
+                                js0.emit(&[
+                                    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_TRIGGER.code(), 1),
+                                ]).expect("Emit failed");
+                            }
+                        },
+                        2 => {
                         },
                         _ => {panic!("Unexpected step");},
                     }
