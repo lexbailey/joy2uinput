@@ -560,10 +560,8 @@ fn main() -> Result<(), Fatal>{
 mod test_utils;
 #[cfg(test)]
 mod test{
-    use std::io::{Read,Write,Error,ErrorKind};
     use serial_test::serial;
     use crate::test_utils::{TestEv, new_virtual_joypad, spawn_main};
-    use crate::Fatal;
 
     macro_rules! next {
         ($step:ident) => {
@@ -581,9 +579,9 @@ mod test{
 
         // 2. spawn a thread to run main()
         let args = vec!["joy2u-mapgen".to_string(), "--debug".to_string()];
-        let (stdout_read_thread, mut recv) = spawn_main(
+        let (_stdout_read_thread, recv, _timeout_joinhandle) = spawn_main(
             move|stdout:std::os::unix::net::UnixStream|{
-                crate::wrapped_main(stdout, &args);
+                crate::wrapped_main(stdout, &args).unwrap();
             }
         );
 
@@ -698,15 +696,14 @@ mod test{
         let dir_path = tmp_dir.path();
         std::env::set_var("JOY2UINPUT_CONFDIR", dir_path);
         let args = vec!["joy2u-mapgen".to_string()];
-        let (stdout_read_thread, mut recv) = spawn_main(
+        let (_stdout_read_thread, recv, _timeout_joinhandle) = spawn_main(
             move|stdout:std::os::unix::net::UnixStream|{
-                crate::wrapped_main(stdout, &args);
+                crate::wrapped_main(stdout, &args).unwrap();
             }
         );
 
 
         let mut step = 0;
-        let mut js1: Option<evdev::uinput::VirtualDevice> = None;
         let mut success = false;
 
         use crate::to_map;
@@ -748,7 +745,7 @@ mod test{
                                 let next_input = &to_map[step2>>1];
                                 if (step2 & 1) == 0 {
                                     match next_input {
-                                        JoyInput::Button(b) => {
+                                        JoyInput::Button(_b) => {
                                             if s.contains(&format!("Press {}", next_input)) {
                                                 next!(step);
                                                 js0.emit(&[
@@ -757,7 +754,7 @@ mod test{
                                                 ]).expect("Emit failed");
                                             }
                                         },
-                                        JoyInput::Axis(a) => {
+                                        JoyInput::Axis(_a) => {
                                             if s.contains(&format!("Move axis {} quickly to both extremes, then wait", next_input)) {
                                                 next!(step);
                                                 js0.emit(&[
@@ -786,12 +783,12 @@ mod test{
                                 }
                                 if (step2 & 1) == 1 {
                                     match next_input {
-                                        JoyInput::Button(b) =>{
+                                        JoyInput::Button(_b) =>{
                                             if s.contains(&format!("Button number 1 is '{}'", to_map[step2>>1])) {
                                                 next!(step);
                                             }
                                         },
-                                        JoyInput::Axis(a) =>{
+                                        JoyInput::Axis(_a) =>{
                                             if s.contains(&format!("Axis 0 is '{}' with range ", to_map[step2>>1])) {
                                                 next!(step);
                                             }

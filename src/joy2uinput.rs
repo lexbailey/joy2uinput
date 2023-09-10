@@ -40,7 +40,7 @@ fn get_user_conf_dir() -> Option<PathBuf>{
     if let Some(d) = std::env::var_os(conf_dir_env_var){
         let dir = PathBuf::from(&d);
         if !dir.is_dir(){
-            eprintln!("Warning: {} does not point to a directory. No user config will be loaded.", conf_dir_env_var);
+            println!("Warning: {} does not point to a directory. No user config will be loaded.", conf_dir_env_var);
             return None;
         }
         return Some(dir);
@@ -73,6 +73,7 @@ enum Ev{
     Disconnect(u32),
     Listen(),
     RawEvent(EventType, u16, i32),
+    Println(String),
 }
 
 
@@ -83,7 +84,7 @@ fn hotplug_thread(evs: Sender<Ev>) -> Option<std::thread::JoinHandle<()>> {
                 Ok(i)
             })() {
         Ok(a) => { Some(a)},
-        Err(_e) => { eprintln!("Warning: failed to start inotify, hotplugging is unavailable"); None},
+        Err(_e) => { println!("Warning: failed to start inotify, hotplugging is unavailable"); None},
     };
 	
     if let Some(mut inotify) = inotify{
@@ -138,7 +139,7 @@ fn pad_thread(evs: Sender<Ev>, s: &Path) -> std::io::Result<(String, std::fs::Fi
             Err(std::io::Error::new(std::io::ErrorKind::Other, "Unable to parse ID"))
         },
         Ok(id) => {
-            eprintln!("Device connected: {}", name);
+            let _ = evs.send(Ev::Println(format!("Device connected: {}", name)));
             Ok((name.clone(), fd, std::thread::spawn(move ||{
                 loop{
                     match joydev::io_control::get_event(rfd){
@@ -150,7 +151,7 @@ fn pad_thread(evs: Sender<Ev>, s: &Path) -> std::io::Result<(String, std::fs::Fi
                         _ => {break;}
                     }
                 }
-                eprintln!("Device diconnected: {}", name);
+                let _ = evs.send(Ev::Println(format!("Device disconnected: {}", name)));
             })))
         },
     }
@@ -193,13 +194,13 @@ fn read_mappings(path: &PathBuf, mappings: &mut HashMap<OsString, HashMap<JDEv, 
                                                 match m{
                                                     Ok(m) => {this_map.insert(m.from, m.to);},
                                                     Err(e) => {
-                                                        eprintln!("Error ('{}' line {}): {}", path.display(), line_num, e);
+                                                        println!("Error ('{}' line {}): {}", path.display(), line_num, e);
                                                         success = false;
                                                     }
                                                 }
                                             },
                                             Err(e) => {
-                                                eprintln!("Failed to read line from config file: {}", e);
+                                                println!("Failed to read line from config file: {}", e);
                                                 success = false;
                                             },
                                         }
@@ -223,7 +224,7 @@ fn read_config(path: &PathBuf) -> (Option<HashMap<JoyInput, Target>>, bool){
     if conf_file.is_file(){
         match OpenOptions::new().read(true).open(&conf_file) {
             Err(e) => {
-                eprintln!("Error while reading config file {}: {}", &conf_file.display(), e);
+                println!("Error while reading config file {}: {}", &conf_file.display(), e);
                 success = false;
             },
             Ok(f) => {
@@ -240,13 +241,13 @@ fn read_config(path: &PathBuf) -> (Option<HashMap<JoyInput, Target>>, bool){
                             match m{
                                 Ok(m) => {map.insert(m.from, m.to);},
                                 Err(e) => {
-                                    eprintln!("Error ('{}' line {}): {}", &conf_file.display(), line_num, e);
+                                    println!("Error ('{}' line {}): {}", &conf_file.display(), line_num, e);
                                     success = false;
                                 }
                             }
                         },
                         Err(e) => {
-                            eprintln!("Failed to read line from config file: {}", e);
+                            println!("Failed to read line from config file: {}", e);
                             success = false;
                         },
                     }
@@ -301,7 +302,13 @@ impl From<std::io::Error> for Fatal {
     }
 }
 
-fn main() -> Result<(),Fatal> {
+fn wrapped_main<A>(mut stdout: A, _args: &Vec<String>) -> Result<(),Fatal> where A: std::io::Write  + std::marker::Send + 'static  {
+
+    macro_rules! println {
+        () => { write!(stdout, "\n"); };
+        ($fstr:literal) => {{ let _res = write!(stdout, concat!($fstr, "\n")); }};
+        ($fstr:literal, $($arg:tt)*) => {{ let _res = write!(stdout, concat!($fstr, "\n"), $($arg)*); }};
+    }
 
     let mut pads: HashMap<u32,ConnectedPad> = HashMap::new();
     let mut listening = false;
@@ -327,12 +334,12 @@ fn main() -> Result<(),Fatal> {
             valid &= valid2;
         }
         if outmap.is_none(){
-            eprintln!("Error: Unable to find config file joy2uinput.conf in user config dir or default config dir.");
+            println!("Error: Unable to find config file joy2uinput.conf in user config dir or default config dir.");
             match get_user_conf_dir(){
-                None => {eprintln!("No user config dir searched was found");},
-                Some(d) => {eprintln!("User config dir searched was: {}", d.display());},
+                None => {println!("No user config dir searched was found");},
+                Some(d) => {println!("User config dir searched was: {}", d.display());},
             }
-            eprintln!("Default config dir searched was: /etc/joy2uinput/");
+            println!("Default config dir searched was: /etc/joy2uinput/");
             return Err(Fatal::Msg("No config".to_string()));
         }
     }
@@ -473,7 +480,7 @@ fn main() -> Result<(),Fatal> {
             if !*poll_axis.lock().unwrap() {
                 *poll_axis.lock().unwrap() = true;
                 if let Err(e) = start_poll.send(()){
-                    eprintln!("Internal error: axis event input sender failed. This is a bug! {}", e);
+                    println!("Internal error: axis event input sender failed. This is a bug! {}", e);
                 }
             }
         }
@@ -492,8 +499,8 @@ fn main() -> Result<(),Fatal> {
                             Ok((name, file, join)) => {
                                 let mapping = expanded_mappings.get(&map_config::jpname_to_filename(&name)).cloned();
                                 if mapping.is_none(){
-                                    eprintln!("Warning: There is no mapping file for the joypad: {}", name);
-                                    eprintln!("No inputs will be handled for this joypad.");
+                                    println!("Warning: There is no mapping file for the joypad: {}", name);
+                                    println!("No inputs will be handled for this joypad.");
                                 }
                                 else{
                                     let mapping = mapping.unwrap();
@@ -504,7 +511,7 @@ fn main() -> Result<(),Fatal> {
                                     });
                                 }
                             }
-                            Err(e) => {eprintln!("Error connecting to joypad {}, will retry if device file attributes change...", e);}
+                            Err(e) => {println!("Error connecting to joypad {}, will retry if device file attributes change...", e);}
                         }
                     }
                     _wait_thread = Some(listen_after(send.clone(), 200));
@@ -530,7 +537,7 @@ fn main() -> Result<(),Fatal> {
                                         Target::Key(k) => {
                                             if enabled{
                                                 if let Err(e) = uinput_dev.emit(&[InputEvent::new(EventType::KEY, k.uinput_key().code(), ev.value().into())]){
-                                                    eprintln!("Error sending event: {}", e);
+                                                    println!("Error sending event: {}", e);
                                                 }
                                             }
                                         },
@@ -584,10 +591,10 @@ fn main() -> Result<(),Fatal> {
                                                 }
                                             }
                                             Target::Key(a) => {
-                                                eprintln!("Warning: This axis is mapped to a button? Not sure what that means. Target event dropped: {:?}", a);
+                                                println!("Warning: This axis is mapped to a button? Not sure what that means. Target event dropped: {:?}", a);
                                             },
                                             Target::ToggleEnabled() => {
-                                                eprintln!("Warning: This axis is mapped to toggle enabled? Not sure what that means.");
+                                                println!("Warning: This axis is mapped to toggle enabled? Not sure what that means.");
                                             },
                                         }
                                         
@@ -599,11 +606,11 @@ fn main() -> Result<(),Fatal> {
                                                     Target::Key(k) => {
                                                         let code = k.uinput_key().code();
                                                         // Can't group these because that doesn't work when a mouse press and mouse release event are both sent in one group (I don't know why)
-                                                        if let Err(e) = uinput_dev.emit(&[ InputEvent::new(EventType::KEY, code, 1), ]){ eprintln!("Error sending event: {}", e); }
-                                                        if let Err(e) = uinput_dev.emit(&[ InputEvent::new(EventType::KEY, code, 0), ]){ eprintln!("Error sending event: {}", e); }
+                                                        if let Err(e) = uinput_dev.emit(&[ InputEvent::new(EventType::KEY, code, 1), ]){ println!("Error sending event: {}", e); }
+                                                        if let Err(e) = uinput_dev.emit(&[ InputEvent::new(EventType::KEY, code, 0), ]){ println!("Error sending event: {}", e); }
                                                     },
                                                     Target::Axis(a) => {
-                                                        eprintln!("Warning: Unable to map this button to its axis target because the device models the button as an axis. Target event dropped: {:?}\nFor an explanation of why this happens, see the github issue here: https://github.com/lexbailey/joy2uinput/issues/2", a);
+                                                        println!("Warning: Unable to map this button to its axis target because the device models the button as an axis. Target event dropped: {:?}\nFor an explanation of why this happens, see the github issue here: https://github.com/lexbailey/joy2uinput/issues/2", a);
                                                     },
                                                     Target::ToggleEnabled() => {
                                                         enabled = !enabled;
@@ -622,7 +629,7 @@ fn main() -> Result<(),Fatal> {
                     if let Err(e) = uinput_dev.emit(&[
                         InputEvent::new(evty, code, value),
                     ]){
-                        eprintln!("Error sending event: {}", e);
+                        println!("Error sending event: {}", e);
                     }
                     if axis_speeds.lock().unwrap().values().all(|&a|a==0){
                         *poll_axis.lock().unwrap() = false;
@@ -631,9 +638,78 @@ fn main() -> Result<(),Fatal> {
                 Ev::Listen() => {
                     listening = true;
                 }
+                Ev::Println(s) => {
+                    println!("{}", s);
+                }
             }
             _ => {break;}
         }
     }
     Ok(())
+}
+
+fn main() -> Result<(), Fatal>{
+    let args: Vec<String> = std::env::args().collect();
+    wrapped_main(std::io::stdout(), &args)
+}
+
+mod test_utils;
+
+#[cfg(test)]
+mod test{
+
+    use serial_test::serial;
+    use crate::test_utils::{TestEv, new_virtual_joypad, spawn_main};
+
+    macro_rules! next {
+        ($step:ident) => {
+            println!("Step {} complete", $step);
+            $step += 1;
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_joypad_input() {
+        // 1. create a virtual joypad (js0)
+        let mut js0 = new_virtual_joypad("testing_joystick0");
+
+        // 2. spawn a thread to run main()
+        let args = vec!["joy2uinput".to_string()];
+        let (_stdout_read_thread, recv, _timeout_join_handle) = spawn_main(
+            move|stdout:std::os::unix::net::UnixStream|{
+                crate::wrapped_main(stdout, &args).unwrap();
+            }
+        );
+
+        let mut step = 0;
+
+        let mut success = false;
+
+        for ev in recv{
+            match ev {
+                TestEv::Timeout() => {panic!("Timeout");},
+                TestEv::Line(s) => {
+                    println!("Got line{}", s);
+                    match step {
+                        0 => {
+                            // 3. check that the output contained details of js0
+                            if s.contains("Device connected: testing_joystick0") {
+                                success = true;
+                                break;
+                                //next!(step);
+                                //std::thread::sleep(std::time::Duration::from_millis(500)); // first 200ms of events are discarded, so wait a bit
+                                //// 4. Press a button on the virtual joypad
+                                //js0.emit(&[
+                                //    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_TRIGGER.code(), 1),
+                                //]).expect("Emit failed");
+                            }
+                        },
+                        _ => {panic!("Unexpected step");},
+                    }
+                },
+            }
+        }
+        assert!(success, "Something didn't happen in the right sequence");
+    }
 }
