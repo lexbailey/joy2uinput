@@ -673,16 +673,18 @@ mod test{
     #[serial]
     fn test_joypad_input() {
         // 1. create a virtual joypad (js0)
-        let mut js0 = new_virtual_joypad("testing_joystick0");
+        let mut js0 = Some(new_virtual_joypad("testing_joystick0"));
 
         // 2. spawn a thread to run main()
         let tmp_dir = tempdir::TempDir::new("tmp_joy2uinput_conf").expect("failed to create temp dir");
         let dir_path = tmp_dir.path();
         std::env::set_var("JOY2UINPUT_CONFDIR", dir_path);
-        let mut fpath = std::path::PathBuf::from(dir_path);
-        fpath.push("joy2uinput.conf");
+        let mut fpath = std::path::PathBuf::from(dir_path); fpath.push("joy2uinput.conf");
         let mut conf_file = std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(fpath).unwrap();
-        conf_file.write_all(b"up = key(up)");
+        conf_file.write_all(b"up = key(up)").expect("Failed to write temp config for testing");
+        let mut mpath = std::path::PathBuf::from(dir_path); mpath.push("testing_joystick0.j2umap");
+        let mut map_file = std::fs::OpenOptions::new().write(true).create(true).truncate(true).open(mpath).unwrap();
+        map_file.write_all(b"button(1) = up").expect("Failed to write temp mapping for testing");
         let args = vec!["joy2uinput".to_string()];
         let (_stdout_read_thread, recv, _timeout_join_handle) = spawn_main(
             move|stdout:std::os::unix::net::UnixStream|{
@@ -703,14 +705,23 @@ mod test{
                         0 => {
                             // 3. check that the output contained details of js0
                             if s.contains("Device connected: testing_joystick0") {
+                                next!(step);
+                                std::thread::sleep(std::time::Duration::from_millis(500)); // first 200ms of events are discarded, so wait a bit
+                                // 4. Press a button on the virtual joypad
+                                js0.as_mut().unwrap().emit(&[
+                                    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_TRIGGER.code(), 1),
+                                    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_TRIGGER.code(), 0),
+                                    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_DPAD_RIGHT.code(), 1),
+                                    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_DPAD_RIGHT.code(), 0),
+                                ]).expect("Emit failed");
+                                std::thread::sleep(std::time::Duration::from_millis(100)); // wait for events to be handled
+                                js0 = None;
+                            }
+                        },
+                        1 => {
+                            if s.contains("Device disconnected: testing_joystick0") {
                                 success = true;
                                 break;
-                                //next!(step);
-                                //std::thread::sleep(std::time::Duration::from_millis(500)); // first 200ms of events are discarded, so wait a bit
-                                //// 4. Press a button on the virtual joypad
-                                //js0.emit(&[
-                                //    evdev::InputEvent::new(evdev::EventType::KEY, evdev::Key::BTN_TRIGGER.code(), 1),
-                                //]).expect("Emit failed");
                             }
                         },
                         _ => {panic!("Unexpected step");},
