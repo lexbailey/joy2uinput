@@ -36,7 +36,7 @@ pub fn spawn_main<T>(wrapped_main: T) -> (std::thread::JoinHandle<()>, std::sync
     let send1 = send.clone();
 
     let timeout_join = std::thread::spawn(move||{
-        std::thread::sleep(std::time::Duration::from_secs(3));
+        std::thread::sleep(std::time::Duration::from_secs(10));
         send1.send(TestEv::Timeout()).unwrap();
     });
 
