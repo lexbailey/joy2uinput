@@ -259,6 +259,7 @@ whatnot.
     - launch <program args> (not actually a uinput event, maps a button to running another program)
 
 (where M is a multiplier for controlling the speed of the input. M can be negative to invert an axis)
+`<program args>` is a list of program arguments separated by spaces. Use double quotes (") to surround arguments with spaces in. Use \\" to escape a double quote and \\\\ to escape a backslash
 
 ## FAQ
 
