@@ -742,7 +742,6 @@ impl FromStr for Target{
             if this_arg.len() > 0{
                 args.push(this_arg);
             }
-            println!("program will be: {:?}", args);
             return Ok(Target::Launch(args));
         }
         Err(format!("Unrecognised uinput target specifier: {}", s))
@@ -862,7 +861,6 @@ impl FromStr for TargetMapping{
 		let left = sides[0].trim();
 		let right = sides[1].trim();
         let joyinput = left.parse::<JoyInput>();
-        println!("right is {}", right);
         let target = right.parse::<Target>();
         // TODO: more helpful error messages with column numbers?
         match (joyinput, target) {
