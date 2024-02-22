@@ -302,6 +302,20 @@ impl From<std::io::Error> for Fatal {
     }
 }
 
+
+fn launch(args: &Vec<String>){
+    let c = &args[0];
+    let res = std::process::Command::new(c)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .args(&args[1..])
+        .spawn();
+    if let Err(e) = res{
+        eprintln!("Failed to launch program: {:?}\n{}", args, e);
+    }
+    println!("Launched {:?}", args);
+}
+
 fn wrapped_main<A>(mut stdout: A, _args: &Vec<String>) -> Result<(),Fatal> where A: std::io::Write  + std::marker::Send + 'static  {
 
     macro_rules! println {
@@ -415,6 +429,7 @@ fn wrapped_main<A>(mut stdout: A, _args: &Vec<String>) -> Result<(),Fatal> where
                     }
                 }
                 Target::ToggleEnabled() => {}
+                Target::Launch(_) => {}
             }
         }
     }
@@ -557,6 +572,11 @@ fn wrapped_main<A>(mut stdout: A, _args: &Vec<String>) -> Result<(),Fatal> where
                                                 enabled = !enabled;
                                             }
                                         },
+                                        Target::Launch(args) => {
+                                            if ev.value() != 0{
+                                                launch(&args);
+                                            }
+                                        },
                                     }
                                 }
                             },
@@ -596,6 +616,9 @@ fn wrapped_main<A>(mut stdout: A, _args: &Vec<String>) -> Result<(),Fatal> where
                                             Target::ToggleEnabled() => {
                                                 println!("Warning: This axis is mapped to toggle enabled? Not sure what that means.");
                                             },
+                                            Target::Launch(_) => {
+                                                println!("Warning: This axis is mapped to launch a program? Not sure what that means.");
+                                            },
                                         }
                                         
                                     },
@@ -614,6 +637,9 @@ fn wrapped_main<A>(mut stdout: A, _args: &Vec<String>) -> Result<(),Fatal> where
                                                     },
                                                     Target::ToggleEnabled() => {
                                                         enabled = !enabled;
+                                                    }
+                                                    Target::Launch(args) => {
+                                                        launch(&args);
                                                     }
                                                 }
                                             },

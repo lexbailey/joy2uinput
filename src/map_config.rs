@@ -354,6 +354,7 @@ pub enum Target{
     Key(KeyTarget),
     Axis(AxisTarget),
     ToggleEnabled(),
+    Launch(Vec<String>),
 }
 
 impl AxisTarget{
@@ -697,6 +698,53 @@ impl FromStr for Target{
         if l.trim() == "toggle_enabled"{
             return Ok(Target::ToggleEnabled());
         }
+        if l.starts_with("launch "){
+            let mut args = Vec::new();
+            let mut this_arg = String::new();
+            let mut in_quote = false;
+            let mut escape = false;
+            for c in s.chars().skip(7){
+                match c{
+                    ' ' => {
+                        if escape{ return Err(format!("unrecognised escape sequence: '\\{}'", c)); }
+                        if in_quote{
+                            this_arg.push(' ');
+                        }
+                        else{
+                            args.push(this_arg);
+                            this_arg = String::new();
+                        }
+                    }
+                    '"' => {
+                        if escape{
+                            this_arg.push('"');
+                            escape = false;
+                        }
+                        else{
+                            in_quote = !in_quote;
+                        }
+                    }
+                    '\\' => {
+                        if escape{
+                            this_arg.push('\\');
+                            escape = false;
+                        }
+                        else{
+                            escape = true;
+                        }
+                    }
+                    a => {
+                        if escape{ return Err(format!("unrecognised escape sequence: '\\{}'", c)); }
+                        this_arg.push(a);
+                    }
+                }
+            }
+            if this_arg.len() > 0{
+                args.push(this_arg);
+            }
+            println!("program will be: {:?}", args);
+            return Ok(Target::Launch(args));
+        }
         Err(format!("Unrecognised uinput target specifier: {}", s))
     }
 }
@@ -814,6 +862,7 @@ impl FromStr for TargetMapping{
 		let left = sides[0].trim();
 		let right = sides[1].trim();
         let joyinput = left.parse::<JoyInput>();
+        println!("right is {}", right);
         let target = right.parse::<Target>();
         // TODO: more helpful error messages with column numbers?
         match (joyinput, target) {
